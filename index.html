@@ -229,7 +229,10 @@
     #goals div{font-size:11px;}
     #goalsBox h3{font-size:10px;}
     #weatherbox{left:6px;right:6px;top:64px;max-width:none;}
-    #dock{top:auto;bottom:calc(148px + env(safe-area-inset-bottom));right:6px;width:150px;max-height:46vh;overflow-y:auto;}
+    #dock{top:auto;bottom:calc(148px + env(safe-area-inset-bottom));right:6px;width:150px;max-height:46vh;}
+    #dock.collapsed{transform:translateX(118px);}
+    #dockTab{width:32px;flex:0 0 32px;font-size:17px;min-height:60px;border-radius:14px 0 0 14px;}
+    #dockInner{overflow-y:auto;}
     #leftRail{flex-direction:row;left:6px;bottom:calc(64px + env(safe-area-inset-bottom));gap:6px;}
     #leftRail button{width:42px;height:42px;font-size:18px;}
     #endFab{width:68px;height:68px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));font-size:19px;}
@@ -277,6 +280,9 @@
   #workbar .tcard.broke{filter:grayscale(.75) opacity(.62);}
   #workbar .tcard.cancel{background:linear-gradient(180deg,#ffd6c4,#ff9d7e);}
   #workbar .cap{font-family:var(--display);font-size:11px;color:#8a5a2e;letter-spacing:.8px;margin:2px 0 3px;}
+  #workbar .docknote{font-size:10px;line-height:1.35;color:#8a5a2e;background:rgba(255,255,255,.5);
+    border:1.5px dashed #cdb083;border-radius:9px;padding:5px 7px;margin-top:4px;}
+  .htag.gtag{width:26px;height:26px;font-size:13px;animation:none;opacity:.92;border-width:2.5px;}
   #bigClock.defend #bcEnergy{display:none;}
   #bigClock.defend #bcTime,#bigClock.defend #bcSep{display:block !important;}
   #bigClock.defend #rtBtn{display:none;}

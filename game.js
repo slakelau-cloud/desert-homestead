@@ -412,7 +412,8 @@ function buildToolbar(){
   if(S.mode==='defend'&&S.dfd){ // BTD6-style tower dock: cards on the right, tap to arm, tap the map to place
     toolbar.innerHTML='';workbar.innerHTML='';
     document.getElementById('dock').style.display='';
-    document.getElementById('dockTab').style.display='none';
+    document.getElementById('dockTab').style.display='';
+    dockTabLabel();
     const cap=document.createElement('div');cap.className='cap';cap.textContent='🏗 Towers';workbar.appendChild(cap);
     for(const c of TOWER_CARDS){
       if(!S.unlocked.includes(c.id))continue;
@@ -429,6 +430,10 @@ function buildToolbar(){
       x.onclick=()=>{S.dfd.sel=null;buildToolbar();say('Placement cancelled.');};
       workbar.appendChild(x);
     }
+    const note=document.createElement('div');
+    note.className='docknote';
+    note.innerHTML='🪓 stone &amp; wood: tap 🪨 boulders and 🪵 trees on the map — free, but they don´t grow back';
+    workbar.appendChild(note);
     toolbarTail(null);
     return;
   }
@@ -579,7 +584,7 @@ window.toFreePlay=function(){S.mode='free';renderChapter();refresh();say('Free p
 document.getElementById('infoBtn').addEventListener('click',()=>{
   document.getElementById('side').classList.add('open');
 });
-document.getElementById('dockTab').addEventListener('click',()=>{
+document.getElementById('dockTab').addEventListener('click',()=>{if(S.mode==='defend'){dockCollapse(!document.getElementById('dock').classList.contains('collapsed'));return;}
   const d=document.getElementById('dock');
   d.classList.toggle('collapsed');
   document.getElementById('dockTab').textContent=d.classList.contains('collapsed')?'⏴':'⏵';
@@ -977,7 +982,7 @@ function startMode(mode,lv){
     dfdStart(lv);
     fitCam();cam.theta=0.18;cam.phi=1.1;updateCamera();
     const howto=lv===0?
-      '<br><br><b>How it works:</b> 🌵 <b>Prickly pear is your starter</b> — plant it anywhere, it never thirsts, but it hits soft. ⛏ <b>Berm & swale</b> slurps water monsters into 💧 (money!) and digs its own beds beside it — that´s where the real towers grow. DRY waves send heat imps to burn your banked water. Pick cards from the <b>dock on the right</b>, tap the map to place, and <b>tap the monsters</b> to smack them yourself.':'';
+      '<br><br><b>How it works:</b> 🌵 <b>Prickly pear is your starter</b> — plant it anywhere, it never thirsts, but it hits soft. ⛏ <b>Berm & swale</b> slurps water monsters into 💧 (money!) and digs its own beds beside it — that´s where the real towers grow. DRY waves send heat imps to burn your banked water. Pick cards from the <b>dock on the right</b>, tap the map to place, and <b>tap the monsters</b> to smack them yourself. 🪓 Stone and wood come from <b>tapping boulders and trees</b> on the map — free, finite, and storms wash fresh driftwood into the channels.':'';
     showChap('🌵 Level '+(lv+1)+' — '+L.name, L.intro+howto);
     log(L.name+': wave 1 of '+dfdWaves().length+' builds on the horizon. The dock is on the right.');
   }
@@ -2809,6 +2814,16 @@ function buildTags(){
       view.appendChild(el);
       harvestTags.push({x,y,el});
     }
+    else if(t&&S.mode==='defend'&&S.dfd&&S.dfd.phase!=='wave'&&!S.dfd.won&&!S.dfd.lost&&
+      (t.type==='rock'||t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco)))){
+      const el=document.createElement('div');
+      const isRock=t.type==='rock';
+      el.className='htag gtag';el.textContent=isRock?'🪨':'🪵';
+      el.title=isRock?'Tap: break for 2 stone (then it´s gone)':'Tap: cut for 2 wood (driftwood too — storms drop more)';
+      el.addEventListener('click',e=>{e.stopPropagation();doTool('gather',x,y);});
+      view.appendChild(el);
+      harvestTags.push({x,y,el});
+    }
     else if(t&&(t.deco==='javelina'||t.deco==='coyote')){
       const el=document.createElement('div');
       el.className='htag rtag';el.textContent=t.deco==='javelina'?'🐗':'🐺';
@@ -3649,6 +3664,7 @@ function dfdStartWave(){
   for(let i=0;i<(W.coy||0);i++)BT.spawns.push({at:5+rnd()*T*0.5,kind:'coy'});
   BT.spawns.sort((a,b)=>a.at-b.at);
   BT.total=BT.spawns.length;
+  if(MOBILE)dockCollapse(true); // battle stations: the map is the show
   showWaveBanner((W.type==='wet'?'⛈':'☀️')+' WAVE '+(D.wave+1)+'<small style="font-size:.55em;opacity:.85"> / '+dfdWaves().length+'</small>');
   if(W.type!=='wet')SFX.thunder();
   say(W.type==='wet'?'The storm is HERE — every drop you catch is money. 🌧':'A DRY wave — heat and hunger. Guard your water and your flock. ☀️');
@@ -4073,11 +4089,28 @@ function dfdHUD(){
   }
 }
 /* placement + battle input */
+function dockTabLabel(){
+  const d=document.getElementById('dock'), tab=document.getElementById('dockTab');
+  if(!tab)return;
+  const collapsed=d.classList.contains('collapsed');
+  if(S.mode==='defend'&&S.dfd){
+    const c=S.dfd.sel?dfdCard(S.dfd.sel):null;
+    tab.textContent=collapsed?(c?c.ic:'🏗'):'⏵';
+    tab.title=collapsed?'Open the tower dock':'Tuck the dock away — see the map';
+  } else tab.textContent=collapsed?'⏴':'⏵';
+}
+function dockCollapse(on){
+  document.getElementById('dock').classList.toggle('collapsed',on);
+  dockTabLabel();
+}
 function dfdSelect(id){
   S.dfd.sel=S.dfd.sel===id?null:id;
   buildToolbar();
   const c=dfdCard(id);
-  if(S.dfd.sel&&c)say(`${c.ic} ${c.name} — ${c.gain}. Tap the map to place (${dfdCostStr(c)||'free'}).`);
+  if(S.dfd.sel&&c){
+    say(`${c.ic} ${c.name} — ${c.gain}. Tap the map to place (${dfdCostStr(c)||'free'}).`);
+    if(MOBILE)dockCollapse(true); // card in hand — get the dock out of the way so you can see the land
+  }
 }
 function pickCreep(e){
   if(!BT)return null;
