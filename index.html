@@ -257,6 +257,14 @@
   #endFab.hintPulse{animation:hintfab .8s ease-in-out 3;}
   @keyframes hintfab{0%,100%{transform:scale(1)}50%{transform:scale(1.12);box-shadow:0 0 0 12px rgba(217,165,32,.22)}}
   @media (max-width:920px){ #nowchip{top:82px;font-size:11.5px;} }
+  /* — level select — */
+  #lvlgrid{display:flex;flex-direction:column;gap:8px;margin:10px 0 2px;}
+  .lvlbtn{display:flex;align-items:center;gap:11px;text-align:left;padding:10px 14px;font-size:15px;}
+  .lvlbtn .ln{font-family:var(--display);font-size:22px;background:rgba(255,255,255,.25);border:2.5px solid rgba(0,0,0,.25);
+    border-radius:11px;width:38px;height:38px;display:flex;align-items:center;justify-content:center;flex:none;}
+  .lvlbtn .lname{flex:1;line-height:1.15;}
+  .lvlbtn .lname small{display:block;font-size:10.5px;opacity:.85;font-family:"Nunito","Segoe UI",sans-serif;font-weight:800;}
+  .lvlbtn .lstars{font-size:15px;color:#ffe9a8;text-shadow:0 1px 0 rgba(0,0,0,.35);letter-spacing:1px;}
   /* — BTD6 tower dock cards — */
   #workbar .tcard{display:flex;align-items:center;gap:8px;width:100%;margin:4px 0;padding:7px 9px;
     background:linear-gradient(180deg,#fffdf2,#ffe9b8);color:var(--ink);text-shadow:none;
@@ -423,7 +431,7 @@
     <div class="panel hidden" id="weatherbox"></div>
   </div>
   <div id="hud">
-    <span class="pill brand">🌵 <span id="verlabel">v4.1</span></span>
+    <span class="pill brand">🌵 <span id="verlabel">v5.0</span></span>
     <span class="pill" id="daybox"></span>
     <span class="pill" id="wpill"></span>
     <span class="pill" id="timerpill" title="The day ends when the sun does — spend your energy fast!">⏳</span>
@@ -457,19 +465,15 @@
       <h2 class="logoT">DESERT<br>HOMESTEAD</h2>
       <div class="logoSub">catch the rain · hold the soil · defend the home</div>
     </div>
-    <p style="margin:6px 0;"><b>The monsoon is coming down your watershed</b> — floods, rockslides, log rams, and raiders. Everything you build fights the water: catch it, slow it, sink it… and it fights FOR you.</p>
-    <p style="line-height:1.7;">⛏ <b>Swales</b> catch the sheet-flow — and each one saves the spot just downhill for the 🧱 berm that banks it. Nothing else can build there.&nbsp;
-    🪵 <b>Beaver-dam analogs</b> pond the wash and green its banks.&nbsp;
-    🪨 <b>Rock dams</b> silt the little creeks into farmland.&nbsp;
-    🌱 <b>Crops drink</b> — 2 moisture a day — so put water where the roots are.&nbsp;
-    🧱 <b>Earthbags</b> raise your home from the dirt your swales pay you.</p>
-    <p><b>Field school first</b> — eight tiny one-click lessons, one per tool. <b>Then ten levels</b> climbing from saguaro country to the pinyon-juniper rim. Deterministic storms — the forecast is a promise. Finish at par pace for ⭐⭐⭐, and mind the rattlers. 🐍</p>
-    <p style="font-size:12.5px;color:#8a6b52;"><b>Drag</b> orbits · <b>scroll</b> zooms · <b>click</b> works the land — it offers what fits · <b>shift-drag</b> repeats your last move · <b>space</b> ends the day · ⏱ turns on the countdown clock if you want the pressure.</p>
-    <button class="bigPlay" onclick="startMode('defend')">🌊 DEFEND THE HOMESTEAD<span class="ribbon">NEW!</span></button>
-    <div class="rowPlay">
-      <button onclick="startMode('campaign')">⭐ Campaign<br><small>18 levels</small></button>
-      <button onclick="startMode('free')">🏜 Free play<br><small>everything open</small></button>
-    </div>
+    <p style="margin:6px 0;"><b>A permaculture castle defense.</b> The monsoon comes down your watershed as living waves — water monsters, rockslides, heat imps, raiders — and everything you build fights back. Swales drink the flood into money, your plants are the towers, and thirst is their ammo.</p>
+    <p style="line-height:1.7;font-size:13px;">⛏ <b>Swale pairs</b> slurp water monsters and bank the 💧.&nbsp;
+    🌽 <b>Plant towers</b> sling, lob, and smash — while their beds stay wet.&nbsp;
+    🪵 <b>Dams</b> wall the wash and snag log rams.&nbsp;
+    ☀️ <b>Dry waves</b> come to burn what you banked.&nbsp;
+    🦫 <b>Keep a dam wet</b> and the beavers finish the job.</p>
+    <p style="font-size:12.5px;color:#8a5a2e;">Five sites, five seasons — from a gentle bajada to the whole watershed. Hold the homestead through every wave. 🦫</p>
+    <p style="font-size:12.5px;color:#8a6b52;"><b>Drag</b> orbits · <b>scroll</b> zooms · <b>tap a card</b> then the map to build · <b>tap monsters</b> to smack them · ⏩ doubles time · ⛈ calls the storm early.</p>
+    <div id="lvlgrid"></div>
     <p id="nojs" style="margin:14px 0 0;font-size:12px;background:#fff2df;border:1px solid #e8bd63;border-radius:9px;padding:8px 10px;">
       ⚠️ <b>Buttons not responding?</b> You're in a file <i>preview</i> (Gmail and iPhone Files previews turn scripts off, so the game can't start).<br>
       <b>Android:</b> download the attachment, then open it from the <b>Files/Downloads app → open with Chrome</b>.<br>

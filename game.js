@@ -111,7 +111,8 @@ function dfdDamage(n,hits){
   say(`💥 The homestead took ${n} damage — ${hits.join(', ')}.`);
   if(D.houseHP<=0&&!D.lost){
     D.lost=true;SFX.lose();
-    document.getElementById('lostbody').innerHTML='🏚 The flood took the house. The season won this round — but the same storms are coming, and now you know their shape.<br><br>Fresh land, same schedule.';
+    document.getElementById('lostbody').innerHTML='🏚 The flood took the house. The season won this round — but the same waves are coming, and now you know their shape.<br><br>Fresh land, same schedule.';
+    window.lostRetry=function(){document.getElementById('lost').classList.add('hidden');startMode('defend',D.level);};
     document.getElementById('lost').classList.remove('hidden');
     log('💔 The house fell. The watershed needs stronger bones next time.');
   }
@@ -952,9 +953,11 @@ const SFX={
 };
 const tutEl=document.getElementById('tut');
 function isUnlocked(id){return S.mode==='free'||S.unlocked.includes(id);}
-function startMode(mode){
+function startMode(mode,lv){
   document.getElementById('intro').classList.add('hidden');
-  S.mode=mode;
+  document.getElementById('win').classList.add('hidden');
+  document.getElementById('lost').classList.add('hidden');
+  S.mode=mode;S.won=false;
   if(mode==='free'){generateTerrain(TERRAINS[0]);fitCam();updateCamera();}
   if(mode==='campaign'){
     S.chapter=0;S.unlocked=CHAPTERS[0].unlocks.slice();
@@ -963,19 +966,20 @@ function startMode(mode){
     log(`Level 1 — ${CHAPTERS[0].name} (par ${CHAPTERS[0].par} days for ★★★). ${CHAPTERS[0].intro}`);
   }
   if(mode==='defend'){
-    generateTerrain(DEF_TERRAIN);
+    lv=lv||0;
+    const L=DLEVELS[lv];
+    generateTerrain(L.terrain);
     dfdSetup();
-    S.water=30;S.waterCap=60;S.seeds=6;S.dirt=4;S.stone=2;S.wood=3;S.bags=0;S.food=6;
+    const st=L.start;
+    S.water=st.water;S.waterCap=st.cap;S.seeds=st.seeds;S.dirt=st.dirt;S.stone=st.stone;S.wood=st.wood;S.bags=0;S.food=6;
+    if(S.dfd)S.dfd.supplies=st.sup;
     S.energyMax=10;S.energy=10;S.dayLv=1;S.weather='sunny';S.forecast='sunny';
-    dfdStart();
+    dfdStart(lv);
     fitCam();cam.theta=0.18;cam.phi=1.1;updateCamera();
-    showChap('🌊 Defend the Homestead',
-      '<b>The monsoon season is a siege</b> — 14 waves are coming down your watershed at your house, greenhouse, and coop on the flat. No days, no turns: the clock at the top is real.<br><br>'+
-      '<b>WET waves are made of water monsters</b> — and water is MONEY. Swale pairs slurp them and bank the liters; dams wall the wash and snag the log rams; berms and boulders stop rockslides cold. Every 💧 you catch funds the fight.<br><br>'+
-      '<b>Your plants are your towers</b>, and thirst is their ammo: beans sling seeds fast, prickly pear guards dry, and the heavy hitters — corn lobbers and squash smashers — grow only in the <b>base garden</b> on the flat, watered from your stock and your cistern (build one down below to raise how much 💧 you can hold). A dry plant is a silent tower — keep them watered.<br><br>'+
-      '<b>DRY waves burn what you banked:</b> heat imps evaporate your water, dust devils wreck what they touch, tumbleweeds steal supplies, and javelinas and coyotes raid from the flanks — scarecrows and cactus fences are their answer. The goat herd pays 🧺 for crafting: rotate it between paddocks and rested pasture pays double.<br><br>'+
-      'Pick towers from the <b>dock on the right</b>, tap the map to place — and TAP THE MONSTERS to smack them yourself. Hold the line through all 14. 🦫 The wash remembers who kept it wet.');
-    log('Wave 1 of '+DWAVES.length+' builds on the horizon. Place your first towers — the dock is on the right.');
+    const howto=lv===0?
+      '<br><br><b>How it works:</b> WET waves are water monsters — swale pairs slurp them into 💧, and 💧 is money. Your plants are towers and thirst is their ammo (heavy hitters grow only in the base garden by the house). DRY waves send heat imps to burn your banked water. Pick towers from the <b>dock on the right</b>, tap the map to place, and <b>tap the monsters</b> to smack them yourself.':'';
+    showChap('🌵 Level '+(lv+1)+' — '+L.name, L.intro+howto);
+    log(L.name+': wave 1 of '+dfdWaves().length+' builds on the horizon. The dock is on the right.');
   }
   renderChapter();refresh();
 }
@@ -3093,7 +3097,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v4.1 · ${S.mode==='campaign'?('level '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):(S.mode==='defend'?('defend · wave '+Math.min((S.dfd?S.dfd.wave:0)+1,DWAVES.length)+'/'+DWAVES.length):'free play')}`;
+  document.getElementById('verlabel').textContent=`v5.0 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -3141,8 +3145,8 @@ function refresh(){
   const G2=document.getElementById('goals');
   const objs=chapterObjectives();
   if(S.mode==='defend'&&S.dfd){
-    const D=S.dfd, nw=D.wave<DWAVES.length?dfdWaveComp(D.wave):null;
-    document.getElementById('goalstitle').textContent=D.lost?'💔 The season won':(D.won?'🏆 Season survived!':(D.phase==='wave'?`⚔ WAVE ${D.wave+1}/${DWAVES.length} — FIGHT!`:`${nw&&nw.type==='wet'?'🌧':'☀️'} Wave ${D.wave+1}/${DWAVES.length} incoming`));
+    const D=S.dfd, nw=D.wave<dfdWaves().length?dfdWaveComp(D.wave):null;
+    document.getElementById('goalstitle').textContent=D.lost?'💔 The season won':(D.won?'🏆 Season survived!':(D.phase==='wave'?`⚔ WAVE ${D.wave+1}/${dfdWaves().length} — FIGHT!`:`${nw&&nw.type==='wet'?'🌧':'☀️'} Wave ${D.wave+1}/${dfdWaves().length} incoming`));
     const hb=(cur,max,ic)=>`<div class="hrow">${ic} <span class="hearts">${'❤️'.repeat(cur)}${'🖤'.repeat(Math.max(0,max-cur))}</span></div>`;
     G2.innerHTML=hb(D.houseHP,12,'🏠')+hb(D.ghHP,6,'🌡')+hb(D.coopHP,6,'🐔')
       +(nw&&D.phase!=='wave'?`<div class="todo">next: ${dfdPreviewStr(D.wave)}</div>`:'')
@@ -3245,7 +3249,7 @@ function nowObjective(){
   if(S.mode==='defend'&&S.dfd){
     const D=S.dfd;
     if(D.won||D.lost)return null;
-    if(D.phase==='wave')return {key:'dfd:fight'+D.wave,text:`WAVE ${D.wave+1} — tap monsters, hold the line!`,full:'Tap water monsters to smack them. Slurped drops become 💧. Keep plant-towers watered — thirsty towers go silent.',hint:null};
+    if(D.phase==='wave')return {key:'dfd:fight'+D.wave,text:`WAVE ${D.wave+1}/${dfdWaves().length} — hold the line!`,full:'Tap water monsters to smack them. Slurped drops become 💧. Keep plant-towers watered — thirsty towers go silent.',hint:null};
     const nw=dfdWaveComp(D.wave);
     return {key:'dfd:prep'+D.wave,text:`${nw.type==='wet'?'🌧':'☀️'} Wave ${D.wave+1} in ${Math.max(0,Math.ceil(D.phaseT))}s — place towers`,
       full:`Next: ${dfdPreviewStr(D.wave)}. ${nw.type==='wet'?'Wet wave — swale pairs and dams turn the monsters into money.':'DRY wave — heat imps drink your water and raiders come for the farm. Scarecrows, fences, and shooters.'}`,hint:'pair'};
@@ -3379,6 +3383,70 @@ document.getElementById('nowchip').addEventListener('click',()=>{
    raiders come to burn the water you banked. Plants are towers and
    thirst is their ammo. No days, no energy — only the season.
    ================================================================ */
+const DLEVELS=[
+ {name:'First Monsoon', sub:'a gentle bajada', par:'learn the water',
+  terrain:{cols:12,rows:20,flatRows:4,flatP:0.45,steepP:0.05,rocks:12,creeks:1,minCreeks:1,name:'a gentle bajada',flora:['saguaro','paloverde','pricklypear','ocotillo']},
+  start:{water:30,cap:60,seeds:6,dirt:4,stone:2,wood:3,sup:2},
+  intro:'The season opens easy — six waves on a kind slope. Learn the loop: <b>slurp the wet waves into money</b>, keep your plant-towers watered, and let nothing reach the yard.',
+  waves:[
+   {type:'wet',drops:1,surge:1},
+   {type:'wet',drops:2,surge:1},
+   {type:'dry',imps:2,tumble:3},
+   {type:'wet',drops:2,surge:2,rocks:1},
+   {type:'dry',imps:3,tumble:4,jav:1},
+   {type:'wet',drops:3,surge:2,logs:1},
+  ]},
+ {name:'The Creeklands', sub:'a steep rocky slope', par:'stone country',
+  terrain:{cols:13,rows:22,flatRows:4,flatP:0.2,steepP:0.25,rocks:20,creeks:3,minCreeks:2,name:'the creeklands',flora:['juniper','agave','ocotillo','saguaro']},
+  start:{water:26,cap:60,seeds:6,dirt:4,stone:4,wood:2,sup:2},
+  intro:'Steep, stony, and quick to shed rain. Three creeks want <b>rock dams</b>, the slopes throw <b>rockslides</b> — berms and boulders stop them cold and pay you stone for the trouble.',
+  waves:[
+   {type:'wet',drops:2,surge:1},
+   {type:'wet',drops:2,surge:2,rocks:1},
+   {type:'dry',imps:3,tumble:5},
+   {type:'wet',drops:3,surge:2,rocks:2},
+   {type:'dry',imps:4,tumble:6,jav:1},
+   {type:'wet',drops:3,surge:3,rocks:2,logs:1},
+   {type:'dry',imps:5,devils:1,tumble:6,coy:1},
+   {type:'wet',drops:4,surge:3,rocks:3,logs:1},
+  ]},
+ {name:'The Big Wash', sub:'wide wash country', par:'wall the river',
+  terrain:{cols:14,rows:24,flatRows:4,flatP:0.4,steepP:0.1,rocks:16,creeks:1,minCreeks:1,name:'wide wash country',flora:['mesquite','saguaro','pricklypear','paloverde']},
+  start:{water:28,cap:60,seeds:6,dirt:5,stone:2,wood:5,sup:2},
+  intro:'The wash owns this valley — big <b>surges</b> and <b>log rams</b> ride every storm. Wall it with dams, snag the logs for wood, and keep a dam wet long enough… <b>the beavers are watching</b>. 🦫',
+  waves:[
+   {type:'wet',drops:2,surge:2},
+   {type:'wet',drops:2,surge:3,logs:1},
+   {type:'dry',imps:3,tumble:4,jav:1},
+   {type:'wet',drops:3,surge:3,logs:2},
+   {type:'dry',imps:5,devils:1,coy:1},
+   {type:'wet',drops:3,surge:4,logs:2,rocks:1},
+   {type:'dry',imps:6,devils:1,tumble:6,jav:1,coy:1},
+   {type:'wet',drops:4,surge:4,logs:3},
+   {type:'wet',drops:4,surge:5,logs:3,rocks:2},
+  ]},
+ {name:'The Dry Year', sub:'an old floodplain', par:'make it last',
+  terrain:{cols:13,rows:24,flatRows:4,flatP:0.5,steepP:0.05,rocks:14,creeks:1,minCreeks:1,name:'an old floodplain',flora:['mesquite','pricklypear','agave']},
+  start:{water:45,cap:80,seeds:7,dirt:4,stone:3,wood:3,sup:3},
+  intro:'Rain is scarce this year — <b>only three wet waves in nine</b>. Every drop you slurp has to last through heat imps, dust devils, and hungry raiders. Scarcity is the whole level: <b>a dry tower is a silent tower.</b>',
+  waves:[
+   {type:'wet',drops:2,surge:2},
+   {type:'dry',imps:3,tumble:4},
+   {type:'dry',imps:4,tumble:4,jav:1},
+   {type:'wet',drops:3,surge:2,rocks:1},
+   {type:'dry',imps:5,devils:1,coy:1},
+   {type:'dry',imps:5,tumble:6,jav:2},
+   {type:'dry',imps:6,devils:2,coy:1,jav:1},
+   {type:'wet',drops:4,surge:3,logs:1},
+   {type:'dry',imps:7,devils:2,tumble:8,jav:2,coy:2},
+  ]},
+ {name:'The Whole Watershed', sub:'the foot of the mesa', par:'everything at once',
+  terrain:{cols:14,rows:26,flatRows:4,flatP:0.3,steepP:0.15,rocks:20,creeks:2,minCreeks:2,name:'the homestead watershed',flora:['saguaro','paloverde','pricklypear','ocotillo','mesquite','juniper','agave']},
+  start:{water:30,cap:60,seeds:6,dirt:4,stone:2,wood:3,sup:2},
+  intro:'Fourteen waves. Wet and dry, rocks and logs, imps and devils and everything with teeth — the full season on the biggest slope. <b>This is the watershed final.</b>',
+  waves:null}, // uses DWAVES below
+];
+let DEF_PROGRESS=[0,0,0,0,0]; // stars per level, this session
 const DWAVES=[
  {type:'wet', drops:1, surge:1},
  {type:'wet', drops:2, surge:1},
@@ -3510,7 +3578,8 @@ function dfdPlaceHint(id){
       return id.startsWith('plant-')?'Plant on open sand or an empty bed.':'Needs open sand.';
   }
 }
-function dfdWaveComp(i){return DWAVES[Math.min(i,DWAVES.length-1)];}
+function dfdWaves(){return (S.dfd&&S.dfd.wavesArr)||DWAVES;}
+function dfdWaveComp(i){const W=dfdWaves();return W[Math.min(i,W.length-1)];}
 function dfdPreviewStr(i){
   const w=dfdWaveComp(i); if(!w)return '';
   const p=[];
@@ -3524,7 +3593,9 @@ function dfdPreviewStr(i){
   if(w.coy)p.push('🐺×'+w.coy);
   return p.join(' ');
 }
-function dfdStart(){ // called from startMode
+function dfdStart(lv){ // called from startMode
+  S.dfd.level=lv||0;
+  S.dfd.wavesArr=DLEVELS[S.dfd.level].waves||DWAVES;
   S.dfd.phase='prep';S.dfd.phaseT=PREP_T;S.dfd.wave=0;S.dfd.speed=1;S.dfd.sel=null;
   S.dfd.prodT={egg:0,graze:0,grow:0,irr:0,seep:0};
   S.dfd.leakAcc=0;
@@ -3560,7 +3631,7 @@ function dfdStartWave(){
   for(let i=0;i<(W.coy||0);i++)BT.spawns.push({at:5+rnd()*T*0.5,kind:'coy'});
   BT.spawns.sort((a,b)=>a.at-b.at);
   BT.total=BT.spawns.length;
-  showWaveBanner((W.type==='wet'?'⛈':'☀️')+' WAVE '+(D.wave+1)+'<small style="font-size:.55em;opacity:.85"> / '+DWAVES.length+'</small>');
+  showWaveBanner((W.type==='wet'?'⛈':'☀️')+' WAVE '+(D.wave+1)+'<small style="font-size:.55em;opacity:.85"> / '+dfdWaves().length+'</small>');
   if(W.type!=='wet')SFX.thunder();
   say(W.type==='wet'?'The storm is HERE — every drop you catch is money. 🌧':'A DRY wave — heat and hunger. Guard your water and your flock. ☀️');
   refresh();
@@ -3938,7 +4009,7 @@ function dfdEndWave(){
   S.seeds+=2;S.dirt+=1;
   dfdUnlocks2();buildToolbar();
   log(summary);say(summary+' +2🌰 +1🟤');
-  if(D.wave>=DWAVES.length){dfdVictory2();return;}
+  if(D.wave>=dfdWaves().length){dfdVictory2();return;}
   D.phase='inter';D.phaseT=INTER_T;
   const nw=dfdWaveComp(D.wave);
   showWaveBanner((nw.type==='wet'?'🌧':'☀️')+' NEXT: '+dfdPreviewStr(D.wave).split(' ').slice(0,3).join(' '));
@@ -3949,12 +4020,20 @@ function dfdVictory2(){
   D.won=true;S.won=true;SFX.fanfare();setTimeout(()=>SFX.fanfare(),700);
   const h=dfdHearts(), stars=h>=20?3:(h>=12?2:1);
   D.stars=stars;
+  DEF_PROGRESS[D.level]=Math.max(DEF_PROGRESS[D.level]||0,stars);
+  const L=DLEVELS[D.level], hasNext=D.level<DLEVELS.length-1;
   document.getElementById('wintext').innerHTML=
-    `Fourteen waves — wet and dry — and the homestead stands. ${'★'.repeat(stars)}${'☆'.repeat(3-stars)}<br>`+
+    `<b>${L.name}</b> — held through all ${dfdWaves().length} waves. ${'★'.repeat(stars)}${'☆'.repeat(3-stars)}<br>`+
     `House ${D.houseHP}/12 ❤ · Greenhouse ${D.ghHP}/6 · Coop ${D.coopHP}/6<br>`+
     `${countAll(t=>t.beaver)?'The beavers hold the wash now — the strongest tower is the one that builds itself. 🦫':'The desert kept what you gave it.'}`;
+  const wb=document.querySelectorAll('#win button');
+  if(wb.length>=2){
+    if(hasNext){wb[0].textContent='⭐ Next level';wb[0].onclick=()=>{document.getElementById('win').classList.add('hidden');S.won=false;startMode('defend',D.level+1);};}
+    else {wb[0].textContent='🏆 Play it again';wb[0].onclick=()=>{document.getElementById('win').classList.add('hidden');S.won=false;startMode('defend',D.level);};}
+    wb[1].textContent='🗺 Level select';wb[1].onclick=()=>location.reload();
+  }
   document.getElementById('win').classList.remove('hidden');
-  log('🏆 SEASON SURVIVED — all '+DWAVES.length+' waves. '+'★'.repeat(stars));
+  log('🏆 '+L.name.toUpperCase()+' SURVIVED — '+'★'.repeat(stars));
 }
 function dfdHUD(){
   const D=S.dfd; if(!D)return;
@@ -4068,7 +4147,21 @@ window.addEventListener('resize',onResize);
 
 /* --- boot --- */
 document.getElementById('nojs').remove(); // scripts run — hide the preview warning
-window.DH={S,clickTile,endDay,doAction,CROPS,tileAt,cam,updateCamera,washPath,creekPaths,BDA_CAP,swaleCap,camera,renderer,CHAPTERS}; window.startMode=startMode; // debug/test hooks
+function renderTitle(){
+  const g=document.getElementById('lvlgrid');
+  if(!g)return;
+  g.innerHTML='';
+  DLEVELS.forEach((L,i)=>{
+    const st=DEF_PROGRESS[i]||0;
+    const b=document.createElement('button');
+    b.className='lvlbtn';
+    b.innerHTML=`<span class="ln">${i+1}</span><span class="lname">${L.name}<small>${L.sub} · ${(L.waves||DWAVES).length} waves</small></span><span class="lstars">${st?'★'.repeat(st)+'☆'.repeat(3-st):''}</span>`;
+    b.onclick=()=>startMode('defend',i);
+    g.appendChild(b);
+  });
+}
+renderTitle();
+window.DH={S,clickTile,endDay,doAction,CROPS,tileAt,cam,updateCamera,washPath,creekPaths,BDA_CAP,swaleCap,camera,renderer,CHAPTERS,DLEVELS}; window.startMode=startMode; // debug/test hooks
 S.unlocked=CHAPTERS[0].unlocks.slice();
 renderChapter();
 setInterval(()=>{ if(S.mode==='campaign')chapterCheck(); },1500); // safety net: never miss a completed level
