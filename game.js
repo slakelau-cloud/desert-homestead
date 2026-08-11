@@ -187,6 +187,7 @@ const BDA_CAP=12;
 function swaleCap(x,y){const below=tileAt(x,y+1);return 10+(below&&below.type==='berm'?8:0);}
 function mapResto(){let m=0;for(const row of S.grid)for(const t of row)if(t.resto>m)m=t.resto;return m;}
 
+const MOBILE=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||Math.min(window.innerWidth,window.innerHeight)<560;
 const logEl=document.getElementById('log');
 function log(msg){const p=document.createElement('p');p.textContent=msg;logEl.prepend(p);
   while(logEl.children.length>40)logEl.lastChild.remove();}
@@ -346,7 +347,7 @@ function loadCode(code){
     S.flags=S.flags||{};
     document.getElementById('intro').classList.add('hidden');
     document.getElementById('saveovl').classList.add('hidden');
-    cam.dist=7+ROWS*0.85;cam.theta=0.18;cam.phi=0.95;updateCamera();
+    fitCam();cam.theta=0.18;cam.phi=0.95;updateCamera();
     renderChapter();refresh();
     say('Save loaded — right where you left it. 💾');
     return true;
@@ -663,13 +664,17 @@ function prologueLoss(){
   rain+=26+2*washPath.length;lost+=26+2*washPath.length;sed+=5;
   return {rain,lost,sed};
 }
+function fitCam(){
+  const portrait=(typeof VH!=='undefined'?VH:window.innerHeight)>(typeof VW!=='undefined'?VW:window.innerWidth);
+  cam.dist=(7+ROWS*0.85)*(portrait?1.5:1);
+}
 function applyLevelStart(c){
   const st=c.start||{};
   S.water=st.water??35;S.waterCap=60;S.seeds=st.seeds??4;S.dirt=st.dirt??2;
   S.stone=st.stone??0;S.wood=st.wood??0;S.bags=st.bags??0;S.food=st.food??0;
   S.energyMax=st.energy??10;
   S.energy=S.energyMax;S.dayLv=1;S.timeLeft=(c.timer||40);
-  cam.dist=7+ROWS*0.85;cam.theta=0.18;cam.phi=0.95;updateCamera();
+  fitCam();cam.theta=0.18;cam.phi=0.95;updateCamera();
   if(c.setup)c.setup();
   // the storm you arrived in: rain runs off the untouched land, dries by morning, and shows the bill
   clearTimeout(S._pro1);clearTimeout(S._pro2);
@@ -740,7 +745,7 @@ function isUnlocked(id){return S.mode==='free'||S.unlocked.includes(id);}
 function startMode(mode){
   document.getElementById('intro').classList.add('hidden');
   S.mode=mode;
-  if(mode==='free'){generateTerrain(TERRAINS[0]);cam.dist=7+ROWS*0.85;updateCamera();}
+  if(mode==='free'){generateTerrain(TERRAINS[0]);fitCam();updateCamera();}
   if(mode==='campaign'){
     S.chapter=0;S.unlocked=CHAPTERS[0].unlocks.slice();
     generateTerrain(CHAPTERS[0].terrain);
@@ -1170,11 +1175,14 @@ function showCtx(t,x,y,cx,cy){
     b.addEventListener('click',e=>{e.stopPropagation();hideCtx();doTool(o.id,x,y);});
     box.appendChild(b);
   }
-  view.appendChild(box);
-  const vr=view.getBoundingClientRect();
-  let px=cx-vr.left+10, py=cy-vr.top-10;
-  px=Math.min(px,vr.width-box.offsetWidth-8); py=Math.max(6,Math.min(py,vr.height-box.offsetHeight-8));
-  box.style.left=px+'px'; box.style.top=py+'px';
+  if(MOBILE){box.classList.add('sheet');document.body.appendChild(box);}
+  else{
+    view.appendChild(box);
+    const vr=view.getBoundingClientRect();
+    let px=cx-vr.left+10, py=cy-vr.top-10;
+    px=Math.min(px,vr.width-box.offsetWidth-8); py=Math.max(6,Math.min(py,vr.height-box.offsetHeight-8));
+    box.style.left=px+'px'; box.style.top=py+'px';
+  }
 }
 function smartClick(x,y,cx,cy){
   const t=tileAt(x,y); if(!t)return;
@@ -2385,7 +2393,7 @@ el.addEventListener('pointerdown',e=>{
   hideCtx();
   dragging=true;moved=0;painted=false;lastPaint=null;downX=lastX=e.clientX;downY=lastY=e.clientY;
   try{el.setPointerCapture(e.pointerId);}catch(err){}
-  if(e.pointerType==='touch'){ // long-press = harvest (the phone's right-click)
+  if(e.pointerType==='touch'){ // long-press = inspect (the phone's right-click)
     if(pressTimer)clearTimeout(pressTimer);
     const px=e.clientX, py=e.clientY;
     pressTimer=setTimeout(()=>{
@@ -2394,9 +2402,9 @@ el.addEventListener('pointerdown',e=>{
       const p=pickTile({clientX:px,clientY:py});
       if(p){
         const t=tileAt(p.x,p.y);
-        if(t&&t.plant){
-          if(navigator.vibrate)navigator.vibrate(25);
-          if(doHarvest(t))refresh();
+        if(t){
+          if(navigator.vibrate)navigator.vibrate(15);
+          say(describe(t,p.x,p.y));
           painted=true; // swallow the tap
         }
       }
@@ -2477,7 +2485,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v3.3 · ${S.mode==='campaign'?('level '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'free play'}`;
+  document.getElementById('verlabel').textContent=`v3.4 · ${S.mode==='campaign'?('level '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'free play'}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -2584,9 +2592,13 @@ function animate(){
   renderer.render(scene,camera);
 }
 
+let _lastPortrait=null;
 function onResize(){
   VW=Math.max(300,view.clientWidth||900);
   VH=Math.max(260,view.clientHeight||560);
+  const p=VH>VW;
+  if(_lastPortrait!==null&&p!==_lastPortrait){fitCam();updateCamera();}
+  _lastPortrait=p;
   renderer.setSize(VW,VH);
   camera.aspect=VW/VH;
   camera.updateProjectionMatrix();
@@ -2634,6 +2646,7 @@ setInterval(()=>{
   bt.classList.toggle('low',S.timeLeft<=10&&!timerPaused());
   tb.style.width=(100*S.timeLeft/total)+'%';
 },250);
+if(MOBILE)document.getElementById('goalsBox').classList.add('min');
 buildToolbar();
 applyWeatherLook();
 log('Day 1: you arrive with a wagon of seeds, a shovel, and big plans.');
