@@ -977,7 +977,7 @@ function startMode(mode,lv){
     dfdStart(lv);
     fitCam();cam.theta=0.18;cam.phi=1.1;updateCamera();
     const howto=lv===0?
-      '<br><br><b>How it works:</b> WET waves are water monsters — swale pairs slurp them into 💧, and 💧 is money. Your plants are towers and thirst is their ammo (heavy hitters grow only in the base garden by the house). DRY waves send heat imps to burn your banked water. Pick towers from the <b>dock on the right</b>, tap the map to place, and <b>tap the monsters</b> to smack them yourself.':'';
+      '<br><br><b>How it works:</b> 🌵 <b>Prickly pear is your starter</b> — plant it anywhere, it never thirsts, but it hits soft. ⛏ <b>Berm & swale</b> slurps water monsters into 💧 (money!) and digs its own beds beside it — that´s where the real towers grow. DRY waves send heat imps to burn your banked water. Pick cards from the <b>dock on the right</b>, tap the map to place, and <b>tap the monsters</b> to smack them yourself.':'';
     showChap('🌵 Level '+(lv+1)+' — '+L.name, L.intro+howto);
     log(L.name+': wave 1 of '+dfdWaves().length+' builds on the horizon. The dock is on the right.');
   }
@@ -3097,7 +3097,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v5.0 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v5.1 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -3466,9 +3466,9 @@ const DWAVES=[
 const PREP_T=45, INTER_T=26;
 // tower cards — the BTD6 dock. cost:{water,seeds,dirt,stone,wood,sup,bags}
 const TOWER_CARDS=[
- {id:'pair',  ic:'⛏', name:'Swale pair', cost:{water:4}, gain:'+2 🟤 · slurps water monsters, banks 💧', unlockWave:0},
- {id:'plant-beans', ic:'🫘', name:'Beans',   cost:{water:6, seeds:1}, gain:'rapid seed-slinger', unlockWave:0},
- {id:'plant-pear',  ic:'🌵', name:'Prickly pear', cost:{water:4, seeds:1}, gain:'spike guard · never thirsts', unlockWave:0},
+ {id:'plant-pear',  ic:'🌵', name:'Prickly pear', cost:{water:3, seeds:1}, gain:'the starter: plant ANYWHERE, never thirsts — but hits soft', unlockWave:0},
+ {id:'pair',  ic:'⛏', name:'Berm & swale', cost:{water:4}, gain:'+2 🟤 · slurps monsters into 💧 · digs its own beds', unlockWave:0},
+ {id:'plant-beans', ic:'🫘', name:'Beans',   cost:{water:6, seeds:1}, gain:'rapid seed-slinger · needs a bed', unlockWave:0},
  {id:'plant-corn',  ic:'🌽', name:'Corn',    cost:{water:10,seeds:1}, gain:'kernel lobber · BASE GARDEN only', unlockWave:1},
  {id:'sling', ic:'🪀', name:'Sling tower', cost:{stone:2,wood:2}, gain:'throws stones · cracks boulders', unlockWave:1},
  {id:'plant-squash',ic:'🎃', name:'Squash',  cost:{water:8, seeds:1}, gain:'smasher · BASE GARDEN only', unlockWave:2},
@@ -3483,7 +3483,7 @@ const CROP_TOWER={ // plants as artillery — thirst is the ammo
  beans: {cd:0.6, range:3.2, dmg:1, splash:0,   drain:5},  // shots per 1 moisture
  corn:  {cd:2.2, range:4.6, dmg:2, splash:1.2, drain:2},
  squash:{cd:1.4, range:1.5, dmg:4, splash:0.9, drain:3},
- pear:  {cd:0.9, range:1.4, dmg:2, splash:0,   drain:0},  // drought-proof: fires dry
+ pear:  {cd:1.1, range:1.7, dmg:1, splash:0,   drain:0},  // the starter: anywhere, tireless, soft-spoken
 };
 let BT=null; // live battle bits: creeps/shots
 function dfdCard(id){return TOWER_CARDS.find(c=>c.id===id);}
@@ -3509,14 +3509,15 @@ function dfdCanPlace(id,x,y){
     case 'bda':return t.type==='wash'&&!t.dam&&!t.deco;
     default:
       if(id.startsWith('plant-')){
-        const ok=(t.type==='sand'&&!t.deco&&!bermReserved(t,x,y))||(t.type==='bed'&&!t.plant);
-        if(!ok)return false;
         const crop=id.slice(6);
-        if(crop==='corn'||crop==='squash'){ // the heavy defenders are base-garden plants:
-          if(y<ROWS-4)return false;        // only on the flat, close to home…
+        if(crop==='pear') // the starter grows straight out of the caliche — anywhere open
+          return (t.type==='sand'&&!t.deco&&!bermReserved(t,x,y))||(t.type==='bed'&&!t.plant);
+        if(t.type!=='bed'||t.plant)return false; // everything else needs a real bed — beds come from berm & swales and the base garden
+        if(crop==='corn'||crop==='squash'){
+          if(y<ROWS-4)return false;
           const nearWork=[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{
             const n=tileAt(x+dx,y+dy);return n&&(n.type==='swale'||n.type==='berm');});
-          if(nearWork)return false;        // …and never beside swales or berms
+          if(nearWork)return false;
         }
         return true;
       }
@@ -3545,15 +3546,31 @@ function dfdPlace(id,x,y){
   if(id==='pair'){
     t.type='swale';t.deco=null;S.dirt+=2;
     const b=tileAt(x,y+1);b.type='berm';b.deco=null;
-    bounceTile(x,y);bounceTile(x,y+1);SFX.dig();popAt(x,y,'⛏ pair!',0,'earth');
+    let beds=0;
+    for(const dx of [-1,1]){ // the dug dirt banks its own growing pockets beside the basin
+      const n=tileAt(x+dx,y);
+      if(n&&n.type==='sand'&&!n.deco&&!nearWash(x+dx,y)&&!bermReserved(n,x+dx,y)){
+        n.type='bed';n.moisture=3;beds++;bounceTile(x+dx,y);
+      }
+    }
+    bounceTile(x,y);bounceTile(x,y+1);SFX.dig();
+    popAt(x,y,beds?`⛏ +${beds} beds!`:'⛏ pair!',0,'earth');
   } else if(id==='sling'){t.type='sling';t.deco=null;SFX.build();bounceTile(x,y);popAt(x,y,'🪀 armed!',0,'earth');}
-  else if(id==='cistern'){t.type='cistern';t.deco=null;S.waterCap+=50;SFX.build();bounceTile(x,y);popAt(x,y,'+50💧 cap',0,'good');}
+  else if(id==='cistern'){
+    t.type='cistern';t.deco=null;S.waterCap+=50;
+    let beds=0;
+    for(const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]){ // the tank digs a garden ring around itself
+      const n=tileAt(x+dx,y+dy);
+      if(n&&n.type==='sand'&&!n.deco&&y+dy>=ROWS-4){n.type='bed';n.moisture=4;beds++;bounceTile(x+dx,y+dy);}
+    }
+    SFX.build();bounceTile(x,y);popAt(x,y,`+50💧 cap${beds?' · +'+beds+' beds':''}`,0,'good');
+  }
   else if(id==='ord'){t.type='ord';t.deco=null;t.inCreek=true;SFX.build();bounceTile(x,y);}
   else if(id==='bda'){t.dam=true;SFX.build();bounceTile(x,y);}
   else if(id==='scare'){t.type='scare';t.deco=null;SFX.build();bounceTile(x,y);}
   else if(id==='fence'){t.type='fence';t.deco=null;SFX.plant();bounceTile(x,y);}
   else if(id.startsWith('plant-')){
-    if(t.type==='sand'){t.type='bed';t.moisture=4;}
+    if(t.type==='sand'){t.type='bed';t.moisture=2;} // only pear ever arrives on sand
     t.plant={crop:id.slice(6),stage:0,grown:0,wilt:0,grow:0};
     SFX.plant();bounceTile(x,y);
   }
@@ -3568,14 +3585,15 @@ function dfdCostStr(c){
 }
 function dfdPlaceHint(id){
   switch(id){
-    case 'pair':return 'Pairs need two open sand tiles stacked — swale above, berm spot below, clear of the wash.';
+    case 'pair':return 'Berm & swale needs two open sand tiles stacked — basin above, bank below, clear of the wash. It digs its own beds beside it.';
     case 'clearT':return 'Tap one of your own works to remove it.';
     case 'ord':return 'Rock dams sit in the small creeks only.';
     case 'bda':return 'Wash dams go on open wash tiles.';
     case 'cistern':return 'The cistern goes on the FLAT, down by the house — storage lives at the base.';
     default:
-      if(id==='plant-corn'||id==='plant-squash')return 'The heavy defenders grow only in the BASE GARDEN — on the flat, and never beside swales or berms.';
-      return id.startsWith('plant-')?'Plant on open sand or an empty bed.':'Needs open sand.';
+      if(id==='plant-corn'||id==='plant-squash')return 'The heavy defenders grow only in BASE GARDEN beds — on the flat, never beside swales or berms. The cistern digs beds around itself.';
+      if(id==='plant-pear')return 'Prickly pear grows anywhere on open ground — banks included, just never in the wash or creeks themselves.';
+      return id.startsWith('plant-')?'Needs an empty bed — berm & swales dig beds beside themselves, and the cistern digs a garden ring.':'Needs open sand.';
   }
 }
 function dfdWaves(){return (S.dfd&&S.dfd.wavesArr)||DWAVES;}
