@@ -407,8 +407,31 @@ const FARM_TOOLS=['plant-beans','plant-squash','plant-corn','plant-pear'];
 const BUILD_TOOLS=['cistern','green','home'];
 let confirmRestart=false;
 function buildToolbar(){
-  // no tool menus — the land is the interface. The dock only holds camp actions (earthbag, haul).
   const workbar=document.getElementById('workbar');
+  if(S.mode==='defend'&&S.dfd){ // BTD6-style tower dock: cards on the right, tap to arm, tap the map to place
+    toolbar.innerHTML='';workbar.innerHTML='';
+    document.getElementById('dock').style.display='';
+    document.getElementById('dockTab').style.display='none';
+    const cap=document.createElement('div');cap.className='cap';cap.textContent='🏗 Towers';workbar.appendChild(cap);
+    for(const c of TOWER_CARDS){
+      if(!S.unlocked.includes(c.id))continue;
+      const b=document.createElement('button');
+      b.className='tcard'+(S.dfd.sel===c.id?' armed':'')+(dfdAfford(c)?'':' broke');
+      b.innerHTML=`<span class="tic">${c.ic}</span><b>${c.name}</b><span class="tcost">${dfdCostStr(c)||'free'}</span>`;
+      b.title=c.gain;
+      b.onclick=()=>dfdSelect(c.id);
+      workbar.appendChild(b);
+    }
+    if(S.dfd.sel){
+      const x=document.createElement('button');
+      x.className='tcard cancel';x.innerHTML='✕ <b>Cancel</b>';
+      x.onclick=()=>{S.dfd.sel=null;buildToolbar();say('Placement cancelled.');};
+      workbar.appendChild(x);
+    }
+    toolbarTail(null);
+    return;
+  }
+  // classic modes: no tool menus — the land is the interface. The dock only holds camp actions (earthbag, haul).
   toolbar.innerHTML='';workbar.innerHTML='';
   const objs=chapterObjectives();
   const nextObj=objs?objs.find(o=>!o.check()):null;
@@ -440,6 +463,19 @@ function buildToolbar(){
 }
 function toolbarTail(hint){
   const fab=document.getElementById('endFab');
+  if(S.mode==='defend'&&S.dfd){
+    if(S.dfd.won||S.dfd.lost){fab.className='';fab.innerHTML='↻<small>Again</small>';fab.onclick=()=>location.reload();return;}
+    if(S.dfd.phase==='wave'){
+      fab.className=S.dfd.speed>1?'gold':'';
+      fab.innerHTML='⏩<small>'+(S.dfd.speed>1?'2×  ON':'2×')+'</small>';
+      fab.onclick=()=>{S.dfd.speed=S.dfd.speed>1?1:2;toolbarTail(null);say(S.dfd.speed>1?'Double time. ⏩':'Back to real time.');};
+    } else {
+      fab.className='gold';
+      fab.innerHTML='⛈<small>Call storm</small>';
+      fab.onclick=()=>{if(S.dfd.phase!=='wave'){S.dfd.phaseT=0;S.water=Math.min(S.waterCap,S.water+6);say('You called it early — +6💧 for the nerve. ⛈');}};
+    }
+    return;
+  }
   if(S.mode==='campaign'&&S.chapter<CHAPTERS.length&&chapterDone()){
     fab.className='gold';
     fab.innerHTML=(S.chapter===CHAPTERS.length-1?'🏆':'⭐')+'<small>Next level</small>';
@@ -929,17 +965,17 @@ function startMode(mode){
   if(mode==='defend'){
     generateTerrain(DEF_TERRAIN);
     dfdSetup();
-    cam.phi=1.1;cam.cz=4.2;cam.dist=Math.min(46,cam.dist+3); // higher vantage, framed on the homestead flat
-    S.unlocked=['inspect','swale','berm','bed','clear','gather','water','harvest','plant-beans','plant-squash','plant-corn','plant-pear'];
-    S.water=30;S.waterCap=60;S.seeds=4;S.dirt=2;S.stone=0;S.wood=0;S.bags=0;S.food=6;
-    S.energyMax=10;S.energy=10;S.dayLv=1;
-    S.forecast='rain'; // storm 1 hits on day 2 — the season opens angry
-    fitCam();cam.theta=0.18;cam.phi=0.95;updateCamera();
+    S.water=30;S.waterCap=60;S.seeds=6;S.dirt=4;S.stone=2;S.wood=3;S.bags=0;S.food=6;
+    S.energyMax=10;S.energy=10;S.dayLv=1;S.weather='sunny';S.forecast='sunny';
+    dfdStart();
+    fitCam();cam.theta=0.18;cam.phi=1.1;updateCamera();
     showChap('🌊 Defend the Homestead',
-      'Your house, greenhouse, and coop sit on the flat at the bottom of the watershed — and the whole monsoon season is coming DOWN that slope. <b>10 storms, each meaner than the last</b>, plus rockslides, log rams in the wash, and raiders on the quiet days: javelinas after your crops, coyotes after the coop.<br><br>'+
-      'Everything you build fights the water: swale-and-berm pairs eat the sheet flow, rock dams calm the creeks, wash dams snag the log rams (and pay you their wood). Berms and boulders stop rockslides cold (+2 stone). Down on the flat, the farm is your armory: eggs from the coop, and the goat herd makes 🧺 supplies — <b>rotate them between paddocks</b> (click a paddock to move the herd; rested pasture pays double) to craft scarecrows and living cactus fences that turn raiders away.<br><br>'+
-      'Keep the water OUT of the yard — every 100L that reaches the flat costs a heart. Restore the wash long enough and the strongest defenders in the desert move in on their own. 🦫<br><br><b>Survive all 10 storms.</b>');
-    log('The monsoon season begins tomorrow. Storm 1 of 10 — get something in the ground TODAY.');
+      '<b>The monsoon season is a siege</b> — 14 waves are coming down your watershed at your house, greenhouse, and coop on the flat. No days, no turns: the clock at the top is real.<br><br>'+
+      '<b>WET waves are made of water monsters</b> — and water is MONEY. Swale pairs slurp them and bank the liters; dams wall the wash and snag the log rams; berms and boulders stop rockslides cold. Every 💧 you catch funds the fight.<br><br>'+
+      '<b>Your plants are your towers</b>, and thirst is their ammo: beans sling seeds fast, prickly pear guards dry, and the heavy hitters — corn lobbers and squash smashers — grow only in the <b>base garden</b> on the flat, watered from your stock and your cistern (build one down below to raise how much 💧 you can hold). A dry plant is a silent tower — keep them watered.<br><br>'+
+      '<b>DRY waves burn what you banked:</b> heat imps evaporate your water, dust devils wreck what they touch, tumbleweeds steal supplies, and javelinas and coyotes raid from the flanks — scarecrows and cactus fences are their answer. The goat herd pays 🧺 for crafting: rotate it between paddocks and rested pasture pays double.<br><br>'+
+      'Pick towers from the <b>dock on the right</b>, tap the map to place — and TAP THE MONSTERS to smack them yourself. Hold the line through all 14. 🦫 The wash remembers who kept it wet.');
+    log('Wave 1 of '+DWAVES.length+' builds on the horizon. Place your first towers — the dock is on the right.');
   }
   renderChapter();refresh();
 }
@@ -1118,7 +1154,8 @@ function doHarvest(t){
   say(`Harvested ${c.name}: +${c.food+bonus} food${bonus&&!sisters?' (rich soil!)':''}${sisters}, +${c.seedback} seeds.${c.name==='Beans'?' The beans fed the soil around them. 🌱':''}`);
   return true;
 }
-function spend(e){ if(S.energy<e){say('Too tired — end the day to rest. 🌙');return false;} S.energy-=e; return true;}
+function spend(e){ if(S.mode==='defend')return true; // defend has no energy — the season is the clock
+  if(S.energy<e){say('Too tired — end the day to rest. 🌙');return false;} S.energy-=e; return true;}
 
 function doAction(id){
   if(id==='fillbag'){
@@ -1433,6 +1470,22 @@ function showCtx(t,x,y,cx,cy){
 }
 function smartClick(x,y,cx,cy){
   const t=tileAt(x,y); if(!t)return;
+  if(S.mode==='defend'&&S.dfd){
+    if(S.dfd.sel){dfdPlace(S.dfd.sel,x,y);buildToolbar();return;}
+    if(t.type==='paddock'&&S.dfd.herd&&!(S.dfd.herd.x===x&&S.dfd.herd.y===y)){
+      S.dfd.herd={x,y};SFX.gather();popAt(x,y,'🐐 rotated!',0,'earth');
+      say(t.soil>=2?'Fresh pasture — double 🧺 on the next graze.':'Thin pasture — let the others rest.');
+      refresh();return;
+    }
+    if(t.type==='bed'&&t.plant&&t.moisture<4){ // hand-water a thirsty tower
+      if(S.water>=3){S.water-=3;t.moisture=Math.min(6,t.moisture+2);SFX.water();popAt(x,y,'+2💧',0,'good');refresh();}
+      else {say('Water stock is dry — catch the next wet wave or wait on the herd.');flashChip('water');}
+      return;
+    }
+    if(t.type==='rock'||t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco))){doTool('gather',x,y);return;}
+    say(describe(t,x,y));
+    return;
+  }
   // instant, unambiguous moves first — the map decides
   if(t.deco==='snake'){doTool('bed',x,y);return;} // any work-click shoos the rattler
   if(t.deco==='javelina'||t.deco==='coyote'){doTool('bed',x,y);return;} // any work-click confronts a raider
@@ -1490,8 +1543,8 @@ function describe(t,x,y){
 }
 
 function endDay(){
+  if(S.mode==='defend')return; // defend runs on real-time waves, not days
   const w=S.weather;
-  if(S.mode==='defend')dfdResolveRaids(); // dusk: unshooed raiders make their move
   for(const row of S.grid)for(const t of row){
     if(t.plant){
       const c=CROPS[t.plant.crop];
@@ -1569,7 +1622,6 @@ function endDay(){
    setTimeout(()=>df.classList.remove('go'),650);}
   S.energy=S.energyMax;
   {const c0=CH(); if(c0)S.timeLeft=c0.timer||40;}
-  if(S.mode==='defend'){dfdEconomy();dfdSpawnRaid();}
   // beavers keep their works in repair — and expand upstream
   for(const pw of washPath){
     const bt=S.grid[pw.y][pw.x];
@@ -2636,6 +2688,18 @@ function buildTile(x,y){
       }
     }
   }
+  if(t.type==='sling'){
+    for(let i=0;i<3;i++){
+      const a=i*(Math.PI*2/3)+0.4;
+      const leg=mesh(G.postG,M.junT,Math.cos(a)*0.16,0.52,Math.sin(a)*0.16);
+      leg.rotation.z=Math.cos(a)*0.35;leg.rotation.x=-Math.sin(a)*0.35;leg.scale.set(1,1.5,1);g.add(leg);
+    }
+    const arm=mesh(G.railG,M.coopRoofM,0,0.82,0);arm.rotation.z=0.55;arm.rotation.y=t.rot;g.add(arm);
+    const pouch=mesh(G.tipS,M.snakeD,Math.cos(t.rot)*0.24,0.94,Math.sin(t.rot)*0.24,{noShadow:true});pouch.scale.setScalar(2.2);g.add(pouch);
+    for(const [px,pz,ps] of [[0.2,-0.16,1.3],[0.1,-0.24,1],[0.26,-0.05,0.9]]){
+      const st2=mesh(G.pebble,M.stone,px,0.36,pz,{noShadow:true});st2.scale.setScalar(ps*0.8);g.add(st2);
+    }
+  }
   if(t.type==='scare'){
     const post=mesh(G.postG,M.junT,0,0.62,0);post.scale.set(1,1.9,1);g.add(post);
     const arms=mesh(G.railG,M.scarShirt,0,0.78,0);arms.scale.set(1.3,1.8,1.8);g.add(arms);
@@ -2976,6 +3040,10 @@ el.addEventListener('pointerup',e=>{
   dragging=false;
   if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}
   if(moved<=9&&!painted){
+    if(S.mode==='defend'&&BT&&!S.dfd.sel){ // battle: tap a monster to smack it
+      const c=pickCreep(e);
+      if(c){hurtCreep(c,1,'tap');SFX.rattle();return;}
+    }
     const p=pickTile(e);
     if(p)smartClick(p.x,p.y,e.clientX,e.clientY);
   }
@@ -3013,7 +3081,8 @@ function updateHover(e){
     hovered=p;
     const t=tileAt(p.x,p.y);
     hoverMesh.position.set(gx(p.x),t.elev+0.34,gz(p.y));
-    hoverMesh.material=S.tool==='inspect'?M.hover:(canAct(S.tool,t,p.x,p.y)?M.hoverOk:M.hoverBad);
+    hoverMesh.material=(S.mode==='defend'&&S.dfd&&S.dfd.sel)?(dfdCanPlace(S.dfd.sel,p.x,p.y)?M.hoverOk:M.hoverBad)
+      :(S.tool==='inspect'?M.hover:(canAct(S.tool,t,p.x,p.y)?M.hoverOk:M.hoverBad));
     hoverMesh.visible=true;
     if(S.tool==='inspect')say(describe(t,p.x,p.y));
   }
@@ -3024,7 +3093,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v4.0 · ${S.mode==='campaign'?('level '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):(S.mode==='defend'?('defend · storm '+Math.min((S.dfd?S.dfd.wave:0)+1,DEF_WAVES.length)+'/'+DEF_WAVES.length):'free play')}`;
+  document.getElementById('verlabel').textContent=`v4.1 · ${S.mode==='campaign'?('level '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):(S.mode==='defend'?('defend · wave '+Math.min((S.dfd?S.dfd.wave:0)+1,DWAVES.length)+'/'+DWAVES.length):'free play')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -3066,17 +3135,18 @@ function refresh(){
       if(bp.children.length!==S.energyMax){bp.innerHTML='';for(let i=0;i<S.energyMax;i++){const d=document.createElement('span');d.className='pip';bp.appendChild(d);}}
       [...bp.children].forEach((d,i)=>d.classList.toggle('off',i>=S.energy));
     }
-    document.getElementById('bigClock').classList.toggle('freeplay',S.mode!=='campaign');
+    document.getElementById('bigClock').classList.toggle('freeplay',S.mode==='free');
+  document.getElementById('bigClock').classList.toggle('defend',S.mode==='defend');
   }
   const G2=document.getElementById('goals');
   const objs=chapterObjectives();
   if(S.mode==='defend'&&S.dfd){
-    const D=S.dfd, nw=D.wave<DEF_WAVES.length?DEF_WAVES[D.wave]:null;
-    document.getElementById('goalstitle').textContent=D.lost?'💔 The season won':(nw?`🌊 Storm ${D.wave+1}/${DEF_WAVES.length} — ${Math.max(0,nw.day-S.day)===0?'TODAY at dusk!':'in '+Math.max(0,nw.day-S.day)+' day'+(nw.day-S.day>1?'s':'')}`:'🏆 Season survived!');
+    const D=S.dfd, nw=D.wave<DWAVES.length?dfdWaveComp(D.wave):null;
+    document.getElementById('goalstitle').textContent=D.lost?'💔 The season won':(D.won?'🏆 Season survived!':(D.phase==='wave'?`⚔ WAVE ${D.wave+1}/${DWAVES.length} — FIGHT!`:`${nw&&nw.type==='wet'?'🌧':'☀️'} Wave ${D.wave+1}/${DWAVES.length} incoming`));
     const hb=(cur,max,ic)=>`<div class="hrow">${ic} <span class="hearts">${'❤️'.repeat(cur)}${'🖤'.repeat(Math.max(0,max-cur))}</span></div>`;
     G2.innerHTML=hb(D.houseHP,12,'🏠')+hb(D.ghHP,6,'🌡')+hb(D.coopHP,6,'🐔')
-      +(nw?`<div class="todo">next: ${nw.run>2?'⛈ heavy rain':'🌧 rain'}${nw.rocks?' · 🪨×'+nw.rocks:''}${nw.debris?' · 🪵×'+nw.debris:''}</div>`:'')
-      +(D.raids.length?`<div class="todo">⚠ raiders: ${D.raids.map(r2=>r2.kind==='javelina'?'🐗':'🐺').join(' ')}</div>`:'')
+      +(nw&&D.phase!=='wave'?`<div class="todo">next: ${dfdPreviewStr(D.wave)}</div>`:'')
+      +`<div class="todo" style="opacity:.8">${nw&&nw.type==='dry'?'dry wave — guard the water you banked':'wet wave — every drop caught is money'}</div>`
       +`<div class="fplink" onclick="location.reload()">back to title</div>`;
   } else if(objs){
     document.getElementById('goalstitle').textContent=`Lv.${S.chapter+1} ${CHAPTERS[S.chapter].name} — Day ${S.dayLv}/${CHAPTERS[S.chapter].par+5} · ${S.dayLv<=CHAPTERS[S.chapter].par?'★★★ pace':(S.dayLv<=CHAPTERS[S.chapter].par+3?'★★ pace':'★ pace')}`;
@@ -3175,12 +3245,10 @@ function nowObjective(){
   if(S.mode==='defend'&&S.dfd){
     const D=S.dfd;
     if(D.won||D.lost)return null;
-    if(D.raids.length)return {key:'dfd:raid'+S.day,text:`Raiders on the flanks — drive them off!`,full:'Raiders strike at dusk: shoo them (tap), or cover the farm with scarecrows and cactus fences.',hint:'raid'};
-    const nw=D.wave<DEF_WAVES.length?DEF_WAVES[D.wave]:null;
-    if(nw){const d=Math.max(0,nw.day-S.day);
-      return {key:'dfd:w'+D.wave,text:`Storm ${D.wave+1}/${DEF_WAVES.length} ${d===0?'hits at DUSK':'in '+d+' day'+(d>1?'s':'')} — dig in`,
-        full:`Storm ${D.wave+1} of ${DEF_WAVES.length}${nw.rocks?' brings '+nw.rocks+' rockslide'+(nw.rocks>1?'s':''):''}${nw.debris?' and '+nw.debris+' log ram'+(nw.debris>1?'s':''):''}. Swale+berm pairs eat sheet flow, dams hold the wash — every 100L that reaches the flat costs a heart.`,hint:'swale'};}
-    return null;
+    if(D.phase==='wave')return {key:'dfd:fight'+D.wave,text:`WAVE ${D.wave+1} — tap monsters, hold the line!`,full:'Tap water monsters to smack them. Slurped drops become 💧. Keep plant-towers watered — thirsty towers go silent.',hint:null};
+    const nw=dfdWaveComp(D.wave);
+    return {key:'dfd:prep'+D.wave,text:`${nw.type==='wet'?'🌧':'☀️'} Wave ${D.wave+1} in ${Math.max(0,Math.ceil(D.phaseT))}s — place towers`,
+      full:`Next: ${dfdPreviewStr(D.wave)}. ${nw.type==='wet'?'Wet wave — swale pairs and dams turn the monsters into money.':'DRY wave — heat imps drink your water and raiders come for the farm. Scarecrows, fences, and shooters.'}`,hint:'pair'};
   }
   if(S.mode==='campaign'){
     const objs=chapterObjectives(); if(!objs)return null;
@@ -3207,7 +3275,7 @@ function bestPairSpot(){ // swale site with the longest clean uphill fetch and a
 function findTile(fn){for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){const t=S.grid[y][x];if(t&&fn(t,x,y))return {x,y};}return null;}
 function hintTarget(h){
   if(!h)return null;
-  if(h==='raid'&&S.dfd&&S.dfd.raids.length){const r2=S.dfd.raids[0];return {x:r2.x,y:r2.y};}
+  if(h==='pair'){const b=bestPairSpot();return b||null;}
   if(h==='end'||S.energy<1)return 'end';
   switch(h){
     case 'swale':{
@@ -3303,6 +3371,633 @@ document.getElementById('nowchip').addEventListener('click',()=>{
   fireBeacon(); // if nothing marks, the say line + highlighted dock button carry it
 });
 
+
+/* ================================================================
+   DEFEND v2 — real-time castle defense on the watershed
+   Wet waves: the water IS the monsters — slurp them and it becomes
+   your money. Dry waves: heat imps, dust devils, tumbleweeds, and
+   raiders come to burn the water you banked. Plants are towers and
+   thirst is their ammo. No days, no energy — only the season.
+   ================================================================ */
+const DWAVES=[
+ {type:'wet', drops:1, surge:1},
+ {type:'wet', drops:2, surge:1},
+ {type:'dry', imps:3, tumble:4},
+ {type:'wet', drops:2, surge:2, rocks:1},
+ {type:'dry', imps:4, tumble:5, jav:1},
+ {type:'wet', drops:3, surge:3, rocks:1, logs:1},
+ {type:'dry', imps:5, devils:1, jav:1, coy:1},
+ {type:'wet', drops:4, surge:3, rocks:2, logs:2},
+ {type:'dry', imps:6, devils:2, tumble:6, coy:1},
+ {type:'wet', drops:4, surge:4, rocks:2, logs:2},
+ {type:'dry', imps:7, devils:2, tumble:8, jav:2, coy:1},
+ {type:'wet', drops:5, surge:5, rocks:3, logs:3},
+ {type:'dry', imps:8, devils:3, jav:2, coy:2},
+ {type:'wet', drops:6, surge:6, rocks:3, logs:4},
+];
+const PREP_T=45, INTER_T=26;
+// tower cards — the BTD6 dock. cost:{water,seeds,dirt,stone,wood,sup,bags}
+const TOWER_CARDS=[
+ {id:'pair',  ic:'⛏', name:'Swale pair', cost:{water:4}, gain:'+2 🟤 · slurps water monsters, banks 💧', unlockWave:0},
+ {id:'plant-beans', ic:'🫘', name:'Beans',   cost:{water:6, seeds:1}, gain:'rapid seed-slinger', unlockWave:0},
+ {id:'plant-pear',  ic:'🌵', name:'Prickly pear', cost:{water:4, seeds:1}, gain:'spike guard · never thirsts', unlockWave:0},
+ {id:'plant-corn',  ic:'🌽', name:'Corn',    cost:{water:10,seeds:1}, gain:'kernel lobber · BASE GARDEN only', unlockWave:1},
+ {id:'sling', ic:'🪀', name:'Sling tower', cost:{stone:2,wood:2}, gain:'throws stones · cracks boulders', unlockWave:1},
+ {id:'plant-squash',ic:'🎃', name:'Squash',  cost:{water:8, seeds:1}, gain:'smasher · BASE GARDEN only', unlockWave:2},
+ {id:'bda',   ic:'🪵', name:'Wash dam',  cost:{wood:3,dirt:1}, gain:'walls the wash · snags logs', unlockWave:2},
+ {id:'ord',   ic:'🪨', name:'Rock dam',  cost:{stone:2}, gain:'creeks only · grinds what passes', unlockWave:1},
+ {id:'scare', ic:'🎃', name:'Scarecrow', cost:{sup:3}, gain:'raiders flee its gaze', unlockWave:3},
+ {id:'fence', ic:'🌵', name:'Cactus fence', cost:{sup:2}, gain:'walls out raiders', unlockWave:4},
+ {id:'cistern',ic:'🛢', name:'Cistern', cost:{stone:3,wood:3}, gain:'+50 💧 cap · waters the base garden · flat only', unlockWave:2},
+ {id:'clearT', ic:'🧹', name:'Clear', cost:{}, gain:'remove a work (berms refund dirt)', unlockWave:0},
+];
+const CROP_TOWER={ // plants as artillery — thirst is the ammo
+ beans: {cd:0.6, range:3.2, dmg:1, splash:0,   drain:5},  // shots per 1 moisture
+ corn:  {cd:2.2, range:4.6, dmg:2, splash:1.2, drain:2},
+ squash:{cd:1.4, range:1.5, dmg:4, splash:0.9, drain:3},
+ pear:  {cd:0.9, range:1.4, dmg:2, splash:0,   drain:0},  // drought-proof: fires dry
+};
+let BT=null; // live battle bits: creeps/shots
+function dfdCard(id){return TOWER_CARDS.find(c=>c.id===id);}
+function dfdAfford(c){
+  const k=c.cost;
+  return (!k.water||S.water>=k.water)&&(!k.seeds||S.seeds>=k.seeds)&&(!k.dirt||S.dirt>=k.dirt)
+    &&(!k.stone||S.stone>=k.stone)&&(!k.wood||S.wood>=k.wood)&&(!k.sup||S.dfd.supplies>=k.sup);
+}
+function dfdPay(c){
+  const k=c.cost;
+  if(k.water)S.water-=k.water; if(k.seeds)S.seeds-=k.seeds; if(k.dirt)S.dirt-=k.dirt;
+  if(k.stone)S.stone-=k.stone; if(k.wood)S.wood-=k.wood; if(k.sup)S.dfd.supplies-=k.sup;
+}
+function dfdCanPlace(id,x,y){
+  const t=tileAt(x,y); if(!t)return false;
+  switch(id){
+    case 'pair':{const b=tileAt(x,y+1);
+      return t.type==='sand'&&!t.deco&&!nearWash(x,y)&&!bermReserved(t,x,y)
+        &&!!b&&b.type==='sand'&&!b.deco&&!nearWash(x,y+1);}
+    case 'sling':case 'scare':case 'fence':return t.type==='sand'&&!t.deco&&!bermReserved(t,x,y);
+    case 'cistern':return t.type==='sand'&&!t.deco&&y>=ROWS-4; // storage lives down at the base
+    case 'ord':return t.type==='creek'&&!t.deco;
+    case 'bda':return t.type==='wash'&&!t.dam&&!t.deco;
+    default:
+      if(id.startsWith('plant-')){
+        const ok=(t.type==='sand'&&!t.deco&&!bermReserved(t,x,y))||(t.type==='bed'&&!t.plant);
+        if(!ok)return false;
+        const crop=id.slice(6);
+        if(crop==='corn'||crop==='squash'){ // the heavy defenders are base-garden plants:
+          if(y<ROWS-4)return false;        // only on the flat, close to home…
+          const nearWork=[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{
+            const n=tileAt(x+dx,y+dy);return n&&(n.type==='swale'||n.type==='berm');});
+          if(nearWork)return false;        // …and never beside swales or berms
+        }
+        return true;
+      }
+      return false;
+  }
+}
+function dfdPlace(id,x,y){
+  const c=dfdCard(id); if(!c)return false;
+  if(id==='clearT'){
+    const t=tileAt(x,y); if(!t)return false;
+    if(['swale','berm','bed','ord','scare','fence','sling'].includes(t.type)){
+      if(t.type==='berm')S.dirt++;
+      if(t.type==='bed'&&t.plant)S.seeds++;
+      t.type='sand';t.plant=null;t.stored=0;t.moisture=0;SFX.dig();bounceTile(x,y);
+      refresh();return true;
+    }
+    if(t.type==='wash'&&t.dam&&!t.beaver){t.dam=false;t.stored=0;S.dirt++;SFX.dig();refresh();return true;}
+    if(t.beaver){say('The beavers are not leaving. This is their dam now. 🦫');return false;}
+    say('Clear removes your own works — swales, berms, beds, dams, crafts.');
+    return false;
+  }
+  if(!dfdAfford(c)){say('Can´t afford it yet — '+dfdCostStr(c)+'.');flashChip(c.cost.water?'water':(c.cost.seeds?'seeds':(c.cost.stone?'stone':(c.cost.wood?'wood':'sup'))));return false;}
+  if(id!=='clearT'&&!dfdCanPlace(id,x,y)){say(dfdPlaceHint(id));return false;}
+  const t=tileAt(x,y);
+  dfdPay(c);
+  if(id==='pair'){
+    t.type='swale';t.deco=null;S.dirt+=2;
+    const b=tileAt(x,y+1);b.type='berm';b.deco=null;
+    bounceTile(x,y);bounceTile(x,y+1);SFX.dig();popAt(x,y,'⛏ pair!',0,'earth');
+  } else if(id==='sling'){t.type='sling';t.deco=null;SFX.build();bounceTile(x,y);popAt(x,y,'🪀 armed!',0,'earth');}
+  else if(id==='cistern'){t.type='cistern';t.deco=null;S.waterCap+=50;SFX.build();bounceTile(x,y);popAt(x,y,'+50💧 cap',0,'good');}
+  else if(id==='ord'){t.type='ord';t.deco=null;t.inCreek=true;SFX.build();bounceTile(x,y);}
+  else if(id==='bda'){t.dam=true;SFX.build();bounceTile(x,y);}
+  else if(id==='scare'){t.type='scare';t.deco=null;SFX.build();bounceTile(x,y);}
+  else if(id==='fence'){t.type='fence';t.deco=null;SFX.plant();bounceTile(x,y);}
+  else if(id.startsWith('plant-')){
+    if(t.type==='sand'){t.type='bed';t.moisture=4;}
+    t.plant={crop:id.slice(6),stage:0,grown:0,wilt:0,grow:0};
+    SFX.plant();bounceTile(x,y);
+  }
+  refresh();
+  return true;
+}
+function dfdCostStr(c){
+  const k=c.cost, p=[];
+  if(k.water)p.push(k.water+'💧');if(k.seeds)p.push(k.seeds+'🌰');if(k.dirt)p.push(k.dirt+'🟤');
+  if(k.stone)p.push(k.stone+'🪨');if(k.wood)p.push(k.wood+'🪵');if(k.sup)p.push(k.sup+'🧺');
+  return p.join(' ');
+}
+function dfdPlaceHint(id){
+  switch(id){
+    case 'pair':return 'Pairs need two open sand tiles stacked — swale above, berm spot below, clear of the wash.';
+    case 'clearT':return 'Tap one of your own works to remove it.';
+    case 'ord':return 'Rock dams sit in the small creeks only.';
+    case 'bda':return 'Wash dams go on open wash tiles.';
+    case 'cistern':return 'The cistern goes on the FLAT, down by the house — storage lives at the base.';
+    default:
+      if(id==='plant-corn'||id==='plant-squash')return 'The heavy defenders grow only in the BASE GARDEN — on the flat, and never beside swales or berms.';
+      return id.startsWith('plant-')?'Plant on open sand or an empty bed.':'Needs open sand.';
+  }
+}
+function dfdWaveComp(i){return DWAVES[Math.min(i,DWAVES.length-1)];}
+function dfdPreviewStr(i){
+  const w=dfdWaveComp(i); if(!w)return '';
+  const p=[];
+  if(w.type==='wet'){p.push('💧×'+(w.drops*COLS));if(w.surge)p.push('🌊×'+w.surge);}
+  else p.push('☀️×'+(w.imps||0));
+  if(w.tumble)p.push('🌾×'+w.tumble);
+  if(w.devils)p.push('🌪×'+w.devils);
+  if(w.rocks)p.push('🪨×'+w.rocks);
+  if(w.logs)p.push('🪵×'+w.logs);
+  if(w.jav)p.push('🐗×'+w.jav);
+  if(w.coy)p.push('🐺×'+w.coy);
+  return p.join(' ');
+}
+function dfdStart(){ // called from startMode
+  S.dfd.phase='prep';S.dfd.phaseT=PREP_T;S.dfd.wave=0;S.dfd.speed=1;S.dfd.sel=null;
+  S.dfd.prodT={egg:0,graze:0,grow:0,irr:0,seep:0};
+  S.dfd.leakAcc=0;
+  dfdUnlocks2();
+}
+function dfdUnlocks2(){
+  const w=S.dfd.wave;
+  S.unlocked=['inspect','gather','clear','water','harvest'];
+  for(const c of TOWER_CARDS)if(w>=c.unlockWave&&!S.unlocked.includes(c.id))S.unlocked.push(c.id);
+}
+/* ---------- the battle ---------- */
+function dfdStartWave(){
+  const D=S.dfd, W=dfdWaveComp(D.wave);
+  D.phase='wave';D.phaseT=0;
+  BT={creeps:[],shots:[],spawns:[],t:0,grp:new THREE.Group(),wet:W.type==='wet',killed:0,banked:0,leaked:0};
+  scene.add(BT.grp);
+  const T=26+D.wave*1.2; // spawn window
+  const rnd=Math.random;
+  if(W.type==='wet'){
+    for(let x=0;x<COLS;x++)for(let i=0;i<W.drops;i++)
+      BT.spawns.push({at:rnd()*T*0.75,kind:'drop',col:x});
+    for(let i=0;i<(W.surge||0);i++)BT.spawns.push({at:2+rnd()*T*0.7,kind:'surge'});
+    S.weather='rain';applyWeatherLook();startRain();SFX.rain();
+  } else {
+    for(let i=0;i<(W.imps||0);i++)BT.spawns.push({at:rnd()*T*0.8,kind:'imp',col:Math.floor(rnd()*COLS)});
+    S.weather='scorcher';applyWeatherLook();
+  }
+  for(let i=0;i<(W.tumble||0);i++)BT.spawns.push({at:rnd()*T*0.8,kind:'tumble',col:Math.floor(rnd()*COLS)});
+  for(let i=0;i<(W.devils||0);i++)BT.spawns.push({at:3+rnd()*T*0.6,kind:'devil',col:Math.floor(rnd()*COLS)});
+  for(let i=0;i<(W.rocks||0);i++)BT.spawns.push({at:2+rnd()*T*0.6,kind:'boulder',col:Math.floor(rnd()*COLS)});
+  for(let i=0;i<(W.logs||0);i++)BT.spawns.push({at:2+rnd()*T*0.6,kind:'log'});
+  for(let i=0;i<(W.jav||0);i++)BT.spawns.push({at:4+rnd()*T*0.5,kind:'jav'});
+  for(let i=0;i<(W.coy||0);i++)BT.spawns.push({at:5+rnd()*T*0.5,kind:'coy'});
+  BT.spawns.sort((a,b)=>a.at-b.at);
+  BT.total=BT.spawns.length;
+  showWaveBanner((W.type==='wet'?'⛈':'☀️')+' WAVE '+(D.wave+1)+'<small style="font-size:.55em;opacity:.85"> / '+DWAVES.length+'</small>');
+  if(W.type!=='wet')SFX.thunder();
+  say(W.type==='wet'?'The storm is HERE — every drop you catch is money. 🌧':'A DRY wave — heat and hunger. Guard your water and your flock. ☀️');
+  refresh();
+}
+const CREEP_DEF={
+  drop:  {hp:1, spd:1.5, L:8,  scale:1},
+  surge: {hp:3, spd:1.9, L:18, scale:1.5},
+  imp:   {hp:2, spd:0.85,L:0,  scale:1.1},
+  tumble:{hp:1, spd:3.0, L:0,  scale:1},
+  devil: {hp:3, spd:1.5, L:0,  scale:1.4},
+  boulder:{hp:3,spd:2.5, L:0,  scale:1.2},
+  log:   {hp:2, spd:2.3, L:0,  scale:1},
+  jav:   {hp:3, spd:0.8, L:0,  scale:1},
+  coy:   {hp:4, spd:1.0, L:0,  scale:1},
+};
+function creepMesh(kind){
+  const g=new THREE.Group();
+  const bob=(m)=>{m.userData.bob=1;return m;};
+  if(kind==='drop'||kind==='surge'){
+    const body=new THREE.Mesh(G.canB,M.water.clone());
+    body.scale.setScalar(kind==='drop'?0.5:0.75);body.castShadow=true;g.add(body);
+    for(const ex of [-0.09,0.09]){
+      const eye=mesh(G.tipS,M.hen,ex*(kind==='drop'?1:1.4),0.12,0.36*(kind==='drop'?0.5:0.75),{noShadow:true});
+      eye.scale.setScalar(1.5);g.add(eye);
+      const pup=mesh(G.tipS,M.snakeD,ex*(kind==='drop'?1:1.4),0.12,0.42*(kind==='drop'?0.5:0.75),{noShadow:true});
+      pup.scale.setScalar(0.7);g.add(pup);
+    }
+  } else if(kind==='imp'){
+    const body=new THREE.Mesh(G.canB,new THREE.MeshBasicMaterial({color:0xff9d3b,transparent:true,opacity:0.85}));
+    body.scale.set(0.5,0.62,0.5);g.add(body);
+    const crown=mesh(G.pinC,M.pvFlower,0,0.42,0,{noShadow:true});crown.scale.set(0.6,0.5,0.6);g.add(crown);
+    for(const ex of [-0.1,0.1]){const eye=mesh(G.tipS,M.snakeD,ex,0.16,0.26,{noShadow:true});eye.scale.setScalar(1.1);g.add(eye);}
+  } else if(kind==='tumble'){
+    const b=new THREE.Mesh(G.junB,M.drift2);b.scale.setScalar(1.15);b.castShadow=true;g.add(b);
+  } else if(kind==='devil'){
+    const c1=new THREE.Mesh(G.pinC,new THREE.MeshBasicMaterial({color:0xd9c9a5,transparent:true,opacity:0.7}));
+    c1.rotation.x=Math.PI;c1.scale.set(1.1,1.6,1.1);c1.position.y=0.5;g.add(c1);
+    const c2=new THREE.Mesh(G.pinC,new THREE.MeshBasicMaterial({color:0xcbb98f,transparent:true,opacity:0.5}));
+    c2.rotation.x=Math.PI;c2.scale.set(0.7,1.0,0.7);c2.position.y=0.2;g.add(c2);
+  } else if(kind==='boulder'){
+    const b=new THREE.Mesh(G.rock,M.rock);b.scale.setScalar(0.9);b.castShadow=true;g.add(b);
+  } else if(kind==='log'){
+    const b=new THREE.Mesh(G.logG,M.drift);b.rotation.z=Math.PI/2;b.scale.setScalar(1.2);b.castShadow=true;g.add(b);
+  } else if(kind==='jav'||kind==='coy'){
+    const mtl=kind==='jav'?M.javelina:M.coyote;
+    const body=new THREE.Mesh(G.canB,mtl);body.scale.set(kind==='jav'?0.62:0.42,kind==='jav'?0.48:0.4,0.8);body.castShadow=true;g.add(body);
+    const head=new THREE.Mesh(G.canB,mtl);head.scale.set(0.24,0.24,0.3);head.position.set(0,0.14,0.42);g.add(head);
+    if(kind==='coy')for(const ex of [-0.06,0.06]){const ear=mesh(G.pinC,mtl,ex,0.3,0.42,{noShadow:true});ear.scale.set(0.14,0.24,0.14);g.add(ear);}
+  }
+  return g;
+}
+function elevAt(x,yF){
+  const y0=Math.max(0,Math.min(ROWS-1,Math.floor(yF))), y1=Math.min(ROWS-1,y0+1);
+  const a=S.grid[y0][Math.max(0,Math.min(COLS-1,x))].elev, b=S.grid[y1][Math.max(0,Math.min(COLS-1,x))].elev;
+  return a+(b-a)*(yF-y0);
+}
+function spawnCreep(sp){
+  const def=CREEP_DEF[sp.kind];
+  const c={kind:sp.kind,hp:def.hp,spd:def.spd,L:def.L,mesh:creepMesh(sp.kind),dead:false,slow:0};
+  if((sp.kind==='log'||(sp.kind==='surge'&&Math.random()<0.7))&&washPath.length){c.lane='wash';c.wi=0;}
+  else if(sp.kind==='jav'||sp.kind==='coy'){
+    c.lane='flank';
+    c.fx=Math.random()<0.5?-0.6:COLS-0.4; c.fy=ROWS-3-Math.random()*5;
+    let tgt=null,bd=1e9;
+    for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){const t=S.grid[y][x];
+      const want=sp.kind==='jav'?(t.type==='bed'):(t.type==='coop'||t.type==='paddock');
+      if(want){const d=Math.abs(x-c.fx)+Math.abs(y-c.fy);if(d<bd){bd=d;tgt={x,y};}}}
+    c.tgt=tgt||{x:S.dfd.hx,y:ROWS-2};
+  }
+  else {c.lane='col';c.col=sp.col!==undefined?sp.col:Math.floor(Math.random()*COLS);c.yF=-0.8-Math.random()*0.6;}
+  if(c.lane==='wash'){const p0=washPath[0];c.mesh.position.set(gx(p0.x),S.grid[p0.y][p0.x].elev+0.45,gz(p0.y-1));}
+  else if(c.lane==='flank')c.mesh.position.set(gx(c.fx),elevAt(Math.round(Math.max(0,Math.min(COLS-1,c.fx))),c.fy)+0.4,gz(c.fy));
+  else c.mesh.position.set(gx(c.col),elevAt(c.col,0)+0.6,gz(c.yF));
+  BT.grp.add(c.mesh);
+  BT.creeps.push(c);
+}
+function creepPos(c){return c.mesh.position;}
+function hurtCreep(c,dmg,src){
+  if(c.dead)return;
+  c.hp-=dmg;
+  if(c.hp<=0){
+    c.dead=true;BT.killed++;
+    const p=creepPos(c);
+    if(c.kind==='drop'||c.kind==='surge'){
+      const gain=src==='slurp'?(c.kind==='drop'?6:14):(c.kind==='drop'?2:4);
+      const got=Math.min(gain,S.waterCap-S.water);
+      if(got>0){S.water+=got;BT.banked+=got;}
+      if(Math.random()<0.3)popAt(Math.max(0,Math.min(COLS-1,Math.round(p.x+COLS/2-0.5))),Math.max(0,Math.min(ROWS-1,Math.round(p.z+ROWS/2-0.5))),'+'+got+'💧',0,'good');
+      SFX.water();
+    } else if(c.kind==='boulder'){S.stone+=2;SFX.gather();}
+    else if(c.kind==='log'){S.wood+=2;SFX.gather();}
+    else if(c.kind==='imp'){S.water=Math.min(S.waterCap,S.water+2);SFX.tick();}
+    else SFX.rattle();
+    c.mesh.scale.setScalar(1.4); // pop-out flourish; removed next tick
+  }
+}
+function dfdLeak(c){
+  const D=S.dfd;
+  c.dead=true;BT.leaked++;
+  if(c.kind==='drop')D.leakAcc+=1;
+  else if(c.kind==='surge')D.leakAcc+=4;
+  else if(c.kind==='boulder'||c.kind==='log'||c.kind==='devil')D.leakAcc+=4;
+  else if(c.kind==='tumble'){D.supplies=Math.max(0,D.supplies-1);popAt(D.hx,ROWS-2,'🌾 −1 🧺',0,'bad');}
+  while(D.leakAcc>=4){D.leakAcc-=4;dfdDamage(1,['the flood breaking through']);}
+}
+function towerKey(x,y){return x+'_'+y;}
+function dfdCombat(dt){
+  const cd=BT.cd=BT.cd||{};
+  const inRange=(x,y,c,r)=>{const p=creepPos(c);const dx=p.x-gx(x),dz=p.z-gz(y);return dx*dx+dz*dz<=r*r;};
+  const nearest=(x,y,r,filt)=>{let best=null,bd=1e9;
+    for(const c of BT.creeps){if(c.dead||filt&&!filt(c))continue;
+      const p=creepPos(c);const dx=p.x-gx(x),dz=p.z-gz(y);const d=dx*dx+dz*dz;
+      if(d<=r*r&&d<bd){bd=d;best=c;}}
+    return best;};
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=S.grid[y][x], k=towerKey(x,y);
+    cd[k]=(cd[k]||0)-dt;
+    if(cd[k]>0)continue;
+    if(t.type==='swale'){ // the collector — slurps water monsters
+      const c=nearest(x,y,1.8,c2=>c2.kind==='drop'||c2.kind==='surge');
+      if(c){hurtCreep(c,3,'slurp');t.stored=Math.min(swaleCap(x,y),t.stored+ (c.kind==='drop'?4:8));cd[k]=t.stored>=swaleCap(x,y)?1.15:0.5;}
+      continue;
+    }
+    if(t.type==='ord'){
+      const c=nearest(x,y,1.3,null);
+      if(c){hurtCreep(c,2,'grind');cd[k]=0.8;}
+      continue;
+    }
+    if(t.type==='wash'&&t.dam){
+      const c=nearest(x,y,1.1,c2=>c2.lane==='wash'||c2.kind==='surge'||c2.kind==='log');
+      if(c){
+        if(c.kind==='log'){hurtCreep(c,4,'snag');popAt(x,y,'🪵 snagged!',0,'earth');}
+        else hurtCreep(c,t.beaver?4:2,'slurp');
+        t.stored=Math.min(t.beaver?BDA_CAP*2:BDA_CAP,t.stored+6);
+        cd[k]=t.beaver?0.3:0.5;
+      }
+      continue;
+    }
+    if(t.type==='sling'){
+      const c=nearest(x,y,3.6,null);
+      if(c){dfdShoot(x,y,0.9,c,c.kind==='boulder'?2:1,'stone');cd[k]=0.7;}
+      continue;
+    }
+    if(t.type==='home'&&t.homeStage>=3&&S.dfd.houseHP>0){ // the castle fights back
+      const c=nearest(x,y,4.5,null);
+      if(c){dfdShoot(x,y,1.6,c,1,'stone');cd[k]=1.0;}
+      continue;
+    }
+    if(t.type==='scare'){
+      for(const c of BT.creeps)if(!c.dead&&(c.kind==='jav'||c.kind==='coy')&&inRange(x,y,c,2.3)&&!c.fleeing){
+        c.fleeing=true;popAt(x,y,'🎃 boo!',0,'earth');
+      }
+      cd[k]=0.5;continue;
+    }
+    if(t.type==='fence'){
+      const c=nearest(x,y,1.2,c2=>c2.kind==='jav'||c2.kind==='coy'||c2.kind==='tumble');
+      if(c){hurtCreep(c,2,'spike');cd[k]=0.7;}
+      continue;
+    }
+    if(t.type==='bed'&&t.plant){
+      const P=t.plant, def=CROP_TOWER[P.crop];
+      if(!def){continue;}
+      if((P.grow||0)<1){cd[k]=0.3;continue;} // still sprouting
+      const dry=t.moisture<=0&&def.drain>0;
+      if(dry){cd[k]=0.6;continue;} // a thirsty tower is a silent tower
+      const c=nearest(x,y,def.range,P.crop==='squash'?(c2=>true):null);
+      if(c){
+        if(def.splash){dfdShoot(x,y,1.2,c,def.dmg,P.crop==='corn'?'kernel':'smash',def.splash);}
+        else dfdShoot(x,y,1.0,c,def.dmg,P.crop==='beans'?'seed':'spike');
+        P.shots=(P.shots||0)+1;
+        if(def.drain&&P.shots%def.drain===0)t.moisture=Math.max(0,t.moisture-1);
+        cd[k]=def.cd;
+      }
+      continue;
+    }
+  }
+}
+function dfdShoot(x,y,h,target,dmg,kind,splash){
+  const from=new THREE.Vector3(gx(x),tileAt(x,y).elev+h,gz(y));
+  const m=new THREE.Mesh(G.tipS,kind==='seed'?M.junT:(kind==='kernel'?M.pvFlower:M.stone));
+  m.scale.setScalar(kind==='smash'?2.6:1.7);
+  m.position.copy(from);
+  BT.grp.add(m);
+  BT.shots.push({m,target,dmg,splash:splash||0,t:0,from,kind});
+  if(kind==='seed')SFX.tick();else if(kind==='kernel')SFX.plant();else SFX.gather();
+}
+function dfdMoveCreeps(dt){
+  const FLAT=ROWS-4;
+  for(const c of BT.creeps){
+    if(c.dead)continue;
+    const bobT=(BT.t*6+ (c.col||0));
+    if(c.lane==='col'){
+      c.yF+=c.spd*dt*(c.slow>0?0.5:1);
+      const t=S.grid[Math.max(0,Math.min(ROWS-1,Math.floor(c.yF)))]?.[c.col];
+      // channels swallow sheet monsters — they join the wash
+      if(t&&(t.type==='wash'||t.type==='creek')&&(c.kind==='drop')){ if(washPath.length){c.lane='wash';c.wi=washPath.findIndex(p=>p.y>=Math.floor(c.yF))||0;if(c.wi<0)c.wi=0;} }
+      if(c.kind==='boulder'){ // structures stop the slide cold
+        const tt=S.grid[Math.max(0,Math.min(ROWS-1,Math.floor(c.yF)))]?.[c.col];
+        if(tt&&(tt.type==='berm'||tt.type==='rock'||tt.type==='ord')){hurtCreep(c,99,'block');popAt(c.col,Math.floor(c.yF),'🪨 caught! +2',0,'earth');continue;}
+      }
+      if(c.kind==='imp'){ // heat imps hunt the wettest ground and drink it
+        c.evT=(c.evT||0)+dt;
+        if(c.evT>2.2){c.evT=0;
+          const cy=Math.max(0,Math.min(ROWS-1,Math.floor(c.yF)));
+          for(let yy=cy-1;yy<=cy+1;yy++)for(let xx=c.col-1;xx<=c.col+1;xx++){
+            const q=(S.grid[yy]||[])[xx];if(!q)continue;
+            if(q.type==='bed'&&q.moisture>0)q.moisture--;
+            if(q.type==='swale'&&q.stored>0)q.stored=Math.max(0,q.stored-2);
+          }
+          if(S.water>0&&Math.random()<0.4){S.water--;flashChip('water');}
+        }
+      }
+      if(c.kind==='devil'){ // dust devils wander and wreck what they touch
+        c.col+=Math.sin(BT.t*1.3+c.yF)*dt*1.2;
+        c.col=Math.max(0,Math.min(COLS-1,c.col));
+        const cy=Math.max(0,Math.min(ROWS-1,Math.floor(c.yF)));
+        const q=S.grid[cy][Math.round(c.col)];
+        if(q&&['scare','fence','sling','bed'].includes(q.type)&&!c.hitT){
+          c.hitT=1;
+          if(q.type==='bed'){q.plant=null;popAt(Math.round(c.col),cy,'🌪 tore the crop!',0,'bad');}
+          else {q.type='sand';popAt(Math.round(c.col),cy,'🌪 wrecked it!',0,'bad');}
+          hurtCreep(c,99,'spent');continue;
+        }
+      }
+      if(c.yF>=FLAT){dfdLeak(c);continue;}
+      c.mesh.position.set(gx(c.col),elevAt(Math.round(c.col),c.yF)+(c.kind==='devil'?0.3:0.42)+Math.sin(bobT)*0.06,gz(c.yF));
+      if(c.kind==='tumble'||c.kind==='boulder')c.mesh.rotation.x+=dt*7;
+      if(c.kind==='devil')c.mesh.rotation.y+=dt*12;
+    } else if(c.lane==='wash'){
+      c.wi+=c.spd*dt*(c.slow>0?0.5:1);
+      if(c.wi>=washPath.length){dfdLeak(c);continue;}
+      const p=washPath[Math.floor(c.wi)];
+      c.mesh.position.set(gx(p.x),S.grid[p.y][p.x].elev+0.42+Math.sin(bobT)*0.05,gz(p.y));
+      if(c.kind==='log')c.mesh.rotation.y+=dt*3;
+    } else { // flank
+      if(c.fleeing){
+        c.fx+=(c.fx<COLS/2?-1:1)*c.spd*1.6*dt;
+        if(c.fx<-1||c.fx>COLS){c.dead=true;continue;}
+      } else {
+        const dx=c.tgt.x-c.fx, dy=c.tgt.y-c.fy, d=Math.hypot(dx,dy);
+        if(d<0.4){ // the raid lands
+          const q=tileAt(c.tgt.x,c.tgt.y);
+          if(c.kind==='jav'&&q&&q.type==='bed'){q.plant=null;q.type='sand';popAt(c.tgt.x,c.tgt.y,'🐗 rooted it up!',0,'bad');}
+          else if(c.kind==='coy'){S.dfd.coopHP=Math.max(0,S.dfd.coopHP-1);popAt(c.tgt.x,c.tgt.y,'🐺 −1 ❤',0,'bad');
+            if(S.dfd.coopHP<=0)log('🐔 The coop is wrecked — no eggs till season´s end.');}
+          c.fleeing=true;SFX.rattle();continue;
+        }
+        c.fx+=dx/d*c.spd*dt;c.fy+=dy/d*c.spd*dt;
+      }
+      const cxi=Math.max(0,Math.min(COLS-1,Math.round(c.fx)));
+      c.mesh.position.set(gx(c.fx),elevAt(cxi,Math.max(0,Math.min(ROWS-1,c.fy)))+0.4+Math.abs(Math.sin(bobT*1.4))*0.08,gz(c.fy));
+      c.mesh.rotation.y=Math.atan2((c.tgt?c.tgt.x-c.fx:1),(c.tgt?c.tgt.y-c.fy:0));
+    }
+  }
+}
+function dfdMoveShots(dt){
+  for(const sh of BT.shots){
+    if(sh.done)continue;
+    sh.t+=dt*2.6;
+    const tp=sh.target&&!sh.target.dead?creepPos(sh.target):sh.last||sh.from;
+    sh.last=tp.clone?tp.clone():tp;
+    const u=Math.min(1,sh.t);
+    sh.m.position.lerpVectors(sh.from,sh.last,u);
+    sh.m.position.y+=Math.sin(u*Math.PI)*0.8;
+    if(u>=1){
+      sh.done=true;BT.grp.remove(sh.m);
+      if(sh.splash){
+        for(const c of BT.creeps){if(c.dead)continue;
+          const p=creepPos(c);const dx=p.x-sh.m.position.x,dz=p.z-sh.m.position.z;
+          if(dx*dx+dz*dz<=sh.splash*sh.splash)hurtCreep(c,sh.dmg,'splash');}
+      } else if(sh.target&&!sh.target.dead)hurtCreep(sh.target,sh.dmg,'shot');
+    }
+  }
+  BT.shots=BT.shots.filter(sh=>!sh.done);
+}
+function dfdProduction(dt){ // the farm economy runs on its own clocks
+  const D=S.dfd, P=D.prodT;
+  P.egg+=dt;P.graze+=dt;P.grow+=dt;P.irr+=dt;P.seep+=dt;
+  if(P.egg>=30){P.egg=0;
+    if(D.coopHP>0){S.food+=2;const c=dfdFindType('coop');if(c){popAt(c.x,c.y,'+2 🥣',0,'good');flyRes(c.x,c.y,'food','🥚',2);}}}
+  if(P.graze>=25){P.graze=0;
+    const h=tileAt(D.herd.x,D.herd.y);
+    if(h&&h.type==='paddock'){
+      const y2=h.soil>=2?2:(h.soil>=1?1:0);
+      if(y2>0){D.supplies+=y2;popAt(D.herd.x,D.herd.y,`+${y2} 🧺`,0,'good');flyRes(D.herd.x,D.herd.y,'sup','🧺',y2);}
+      h.soil=Math.max(0,h.soil-1);
+    }
+    for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){const t=S.grid[y][x];
+      if(t.type==='paddock'&&!(D.herd.x===x&&D.herd.y===y)&&t.soil<2){t.regrow=(t.regrow||0)+1;if(t.regrow>=2){t.soil++;t.regrow=0;}}}
+  }
+  if(P.grow>=1){P.grow=0;
+    for(const row of S.grid)for(const t of row)
+      if(t.type==='bed'&&t.plant&&(t.plant.grow||0)<1){
+        t.plant.grow=(t.plant.grow||0)+1/8; // 8s to stand up
+        t.plant.grown=Math.round(Math.min(1,t.plant.grow)*CROPS[t.plant.crop].days); // reuse growth visuals
+        if(t.plant.grow>=1){t.plant.grown=CROPS[t.plant.crop].days-0.001;popAt(tileXY(t)?.x??0,tileXY(t)?.y??0,'ready!',0,'good');}
+      }
+  }
+  if(P.irr>=4){P.irr=0; // swales water the beds beside them — position IS irrigation
+    for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){const t=S.grid[y][x];
+      if(t.type==='swale'&&t.stored>0){
+        for(const [dx,dy] of [[1,0],[-1,0],[0,1]]){
+          const n=tileAt(x+dx,y+dy);
+          if(n&&n.type==='bed'&&n.moisture<4){n.moisture++;t.stored--;break;}
+        }
+      }
+      if(t.type==='wash'&&t.dam&&t.stored>0){
+        for(const n of neighbors(x,y))if(n.type==='bed'&&n.moisture<5){n.moisture++;t.stored--;break;}
+      }
+      if(t.type==='cistern'&&S.water>0){ // the cistern keeps the base garden fighting
+        for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){
+          const n=tileAt(x+dx,y+dy);
+          if(n&&n.type==='bed'&&n.moisture<5&&S.water>0){n.moisture++;S.water--;}
+        }
+      }
+    }
+  }
+  if(P.seep>=6){P.seep=0; // ground drinks: capacity comes back
+    for(const row of S.grid)for(const t of row){
+      if(t.type==='swale'&&t.stored>0)t.stored--;
+      if(t.type==='wash'&&t.dam&&t.stored>0){t.stored=Math.max(0,t.stored-(t.beaver?1:2));
+        t.wetS=(t.wetS||0)+6;
+        // life comes back to a wet dam — and then the beavers do
+        if(t.wetS>40&&t.resto<1)t.resto=1;
+        if(t.wetS>80&&t.resto<2){t.resto=2;log('Willows on the dam — keep it wet. Something is watching from downstream. 🌿');}
+        if(t.wetS>150&&!t.beaver){t.beaver=true;popAt(tileXY(t)?.x??0,tileXY(t)?.y??0,'🦫 BEAVERS!',0,'good');
+          log('🦫 A beaver pair claimed your dam — double pond, self-repairing, and they build upstream.');}
+      }
+      if(t.beaver&&(t.wetS||0)>0&&Math.floor(t.wetS)%60===0){
+        const pw=washPath.find(q=>S.grid[q.y][q.x]===t);
+        if(pw){const up=washPath.find(q=>q.y<pw.y&&Math.abs(q.x-pw.x)<=1&&!S.grid[q.y][q.x].dam);
+          if(up){S.grid[up.y][up.x].dam=true;popAt(up.x,up.y,'🦫 new dam!',0,'good');}}
+      }
+    }
+  }
+}
+function dfdTick(dtMs){
+  const D=S.dfd; if(!D||D.won||D.lost)return;
+  if(modalUp())return; // the season pauses for reading, nothing else
+  let acc=(D._acc||0)+dtMs*(D.speed||1);
+  let steps=0;
+  while(acc>=50&&steps<160){
+    acc-=50;steps++;
+    const dt=0.05;
+    if(D.phase==='prep'||D.phase==='inter'){
+      D.phaseT-=dt;
+      dfdProduction(dt);
+      if(D.phaseT<=0)dfdStartWave();
+    } else if(D.phase==='wave'&&BT){
+      BT.t+=dt;
+      while(BT.spawns.length&&BT.spawns[0].at<=BT.t){spawnCreep(BT.spawns.shift());}
+      dfdMoveCreeps(dt);
+      dfdCombat(dt);
+      dfdMoveShots(dt);
+      dfdProduction(dt);
+      // clear the fallen
+      for(const c of BT.creeps)if(c.dead&&c.mesh.parent){BT.grp.remove(c.mesh);}
+      BT.creeps=BT.creeps.filter(c=>!c.dead);
+      if(!BT.spawns.length&&!BT.creeps.length)dfdEndWave();
+      if(D.lost)break;
+    }
+  }
+  D._acc=acc;
+  dfdHUD();
+}
+function dfdEndWave(){
+  const D=S.dfd;
+  scene.remove(BT.grp);
+  const wet=BT.wet;
+  if(wet){const nC=countAll(t=>t.type==='cistern');if(nC){const got=Math.min(15*nC,S.waterCap-S.water);if(got>0){S.water+=got;BT.banked+=got;}}}
+  const summary=`${wet?'🌧':'☀️'} Wave ${D.wave+1} cleared — ${BT.killed} down, ${BT.leaked} through${wet?`, +${BT.banked}💧 banked`:''}.`;
+  BT=null;
+  S.weather='sunny';applyWeatherLook();
+  D.wave++;
+  S.seeds+=2;S.dirt+=1;
+  dfdUnlocks2();buildToolbar();
+  log(summary);say(summary+' +2🌰 +1🟤');
+  if(D.wave>=DWAVES.length){dfdVictory2();return;}
+  D.phase='inter';D.phaseT=INTER_T;
+  const nw=dfdWaveComp(D.wave);
+  showWaveBanner((nw.type==='wet'?'🌧':'☀️')+' NEXT: '+dfdPreviewStr(D.wave).split(' ').slice(0,3).join(' '));
+  refresh();
+}
+function dfdVictory2(){
+  const D=S.dfd; if(D.won)return;
+  D.won=true;S.won=true;SFX.fanfare();setTimeout(()=>SFX.fanfare(),700);
+  const h=dfdHearts(), stars=h>=20?3:(h>=12?2:1);
+  D.stars=stars;
+  document.getElementById('wintext').innerHTML=
+    `Fourteen waves — wet and dry — and the homestead stands. ${'★'.repeat(stars)}${'☆'.repeat(3-stars)}<br>`+
+    `House ${D.houseHP}/12 ❤ · Greenhouse ${D.ghHP}/6 · Coop ${D.coopHP}/6<br>`+
+    `${countAll(t=>t.beaver)?'The beavers hold the wash now — the strongest tower is the one that builds itself. 🦫':'The desert kept what you gave it.'}`;
+  document.getElementById('win').classList.remove('hidden');
+  log('🏆 SEASON SURVIVED — all '+DWAVES.length+' waves. '+'★'.repeat(stars));
+}
+function dfdHUD(){
+  const D=S.dfd; if(!D)return;
+  const bc=document.getElementById('bcTime');
+  if(bc){
+    if(D.phase==='wave'&&BT)bc.textContent=`⚔ ${BT.creeps.length+BT.spawns.length}`;
+    else bc.textContent=(dfdWaveComp(D.wave)?.type==='wet'?'⛈ ':'☀️ ')+Math.max(0,Math.ceil(D.phaseT))+'s';
+  }
+  const tb=document.getElementById('timebar');
+  if(tb){
+    if(D.phase==='wave'&&BT)tb.style.width=Math.round(100*(1-(BT.creeps.length+BT.spawns.length)/Math.max(1,BT.total)))+'%';
+    else tb.style.width=Math.round(100*(1-D.phaseT/(D.phase==='prep'?PREP_T:INTER_T)))+'%';
+  }
+  const nt=document.getElementById('nowtext');
+  if(nt&&!D.won&&!D.lost){
+    const o=nowObjective();
+    if(o)nt.textContent=o.text;
+    document.getElementById('nowchip').classList.toggle('hidden',!o);
+  }
+}
+/* placement + battle input */
+function dfdSelect(id){
+  S.dfd.sel=S.dfd.sel===id?null:id;
+  buildToolbar();
+  const c=dfdCard(id);
+  if(S.dfd.sel&&c)say(`${c.ic} ${c.name} — ${c.gain}. Tap the map to place (${dfdCostStr(c)||'free'}).`);
+}
+function pickCreep(e){
+  if(!BT)return null;
+  const r=el.getBoundingClientRect();
+  pointer.x=((e.clientX-r.left)/r.width)*2-1;
+  pointer.y=-((e.clientY-r.top)/r.height)*2+1;
+  raycaster.setFromCamera(pointer,camera);
+  const hits=raycaster.intersectObjects(BT.grp.children,true);
+  for(const h of hits){
+    let o=h.object;
+    while(o&&o.parent!==BT.grp)o=o.parent;
+    const c=BT.creeps.find(c2=>c2.mesh===o);
+    if(c&&!c.dead)return c;
+  }
+  return null;
+}
+
 /* --- loop --- */
 let tick=0;
 function animate(){
@@ -3321,6 +4016,7 @@ function animate(){
       }}
   }
   animateTilePops();
+  if(S.mode==='defend'&&S.dfd){const nowT=performance.now();dfdTick(nowT-(S.dfd._lastT||nowT));S.dfd._lastT=nowT;}
   if(performance.now()-lastGuidT>260){lastGuidT=performance.now();guidanceTick();} // time-based: survives throttled frame rates
   for(const a of animated){
     a.mesh.position.y=a.baseY+Math.sin(tick*0.06+a.phase)*0.05;
@@ -3391,6 +4087,8 @@ function timerPaused(){
 }
 setInterval(()=>{
   const tp=document.getElementById('timerpill'), tb=document.getElementById('timebar');
+  if(S.mode==='defend'){tp.style.display='none';tb.style.display='';
+    document.getElementById('bigClock').classList.remove('freeplay');return;} // dfdHUD owns the clock here
   const c=CH();
   if(!c||S.mode!=='campaign'){tp.style.display='none';tb.style.display='none';
     document.getElementById('bigClock').classList.add('freeplay');return;}

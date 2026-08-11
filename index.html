@@ -229,7 +229,7 @@
     #goals div{font-size:11px;}
     #goalsBox h3{font-size:10px;}
     #weatherbox{left:6px;right:6px;top:64px;max-width:none;}
-    #dock{top:auto;bottom:calc(148px + env(safe-area-inset-bottom));right:6px;width:150px;max-height:40vh;}
+    #dock{top:auto;bottom:calc(148px + env(safe-area-inset-bottom));right:6px;width:150px;max-height:46vh;overflow-y:auto;}
     #leftRail{flex-direction:row;left:6px;bottom:calc(64px + env(safe-area-inset-bottom));gap:6px;}
     #leftRail button{width:42px;height:42px;font-size:18px;}
     #endFab{width:68px;height:68px;right:8px;bottom:calc(8px + env(safe-area-inset-bottom));font-size:19px;}
@@ -257,6 +257,21 @@
   #endFab.hintPulse{animation:hintfab .8s ease-in-out 3;}
   @keyframes hintfab{0%,100%{transform:scale(1)}50%{transform:scale(1.12);box-shadow:0 0 0 12px rgba(217,165,32,.22)}}
   @media (max-width:920px){ #nowchip{top:82px;font-size:11.5px;} }
+  /* — BTD6 tower dock cards — */
+  #workbar .tcard{display:flex;align-items:center;gap:8px;width:100%;margin:4px 0;padding:7px 9px;
+    background:linear-gradient(180deg,#fffdf2,#ffe9b8);color:var(--ink);text-shadow:none;
+    border-radius:13px;font-size:12px;text-align:left;}
+  #workbar .tcard .tic{font-size:21px;line-height:1;filter:drop-shadow(0 2px 1px rgba(0,0,0,.18));}
+  #workbar .tcard b{font-family:var(--display);font-weight:400;flex:1;}
+  #workbar .tcard .tcost{font-size:10.5px;font-weight:800;color:#7a5426;white-space:nowrap;}
+  #workbar .tcard.armed{background:linear-gradient(180deg,#b9f296,#7ed06c 60%,#5cb84a);outline:3px solid #2e6f24;}
+  #workbar .tcard.armed b,#workbar .tcard.armed .tcost{color:#173d10;}
+  #workbar .tcard.broke{filter:grayscale(.75) opacity(.62);}
+  #workbar .tcard.cancel{background:linear-gradient(180deg,#ffd6c4,#ff9d7e);}
+  #workbar .cap{font-family:var(--display);font-size:11px;color:#8a5a2e;letter-spacing:.8px;margin:2px 0 3px;}
+  #bigClock.defend #bcEnergy{display:none;}
+  #bigClock.defend #bcTime,#bigClock.defend #bcSep{display:block !important;}
+  #bigClock.defend #rtBtn{display:none;}
   @media (max-width:640px){
     #nowchip{top:118px;max-width:88vw;font-size:12px;}
     #goalsBox{top:82px !important;}
