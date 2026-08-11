@@ -181,6 +181,9 @@ generateTerrain(TERRAINS[0]);
 
 const tileAt=(x,y)=>(x>=0&&x<COLS&&y>=0&&y<ROWS)?S.grid[y][x]:null;
 const nearWash=(x,y)=>[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{const n=tileAt(x+dx,y+dy);return n&&n.type==='wash';});
+// Once a swale is dug, the open sand tile DIRECTLY DOWNHILL of it is spoken for:
+// only its berm can ever be built there. (Derived, not stored — clearing the swale frees the spot.)
+const bermReserved=(t,x,y)=>{if(!t||t.type!=='sand'||nearWash(x,y))return false;const up=tileAt(x,y-1);return !!(up&&up.type==='swale');};
 function neighbors(x,y){return [tileAt(x-1,y),tileAt(x+1,y),tileAt(x,y-1),tileAt(x,y+1)].filter(Boolean);}
 function countAll(fn){let n=0;for(const row of S.grid)for(const t of row)if(fn(t))n++;return n;}
 const BDA_CAP=12;
@@ -291,6 +294,7 @@ function toggleOverlay(){
   refresh();
 }
 window.addEventListener('keydown',e=>{
+  noteInput();
   if((e.key==='v'||e.key==='V')&&!e.repeat)toggleOverlay();
   if((e.key===' '||e.key==='e'||e.key==='E')&&!e.repeat){
     if(!document.getElementById('intro').classList.contains('hidden'))return;
@@ -440,10 +444,10 @@ const BASICS=[
   terrain:Object.assign({},PRACTICE),
   start:{water:6,seeds:0,dirt:0,energy:6},
   script:{rains:[2]},
-  intro:'Field school, lesson 1 — the swale. There are no menus here: just click the land. Click any open sand to dig a swale, then click the tile JUST BELOW it and pick 🧱 Berm. That pair is the whole game: the swale catches rain, the berm makes it hold more. A storm comes tomorrow — end the day and watch it fill. (The dashed ⏭ button on the left skips any lesson.)',
+  intro:'Field school, lesson 1 — the swale. There are no menus here: just click the land. Click any open sand to dig a swale, then click the green-marked tile JUST BELOW it — your dug dirt banks into a 🧱 berm there. That downhill spot belongs to the berm from the moment the swale is dug; nothing else can ever be built on it. The pair is the whole game: the swale catches rain, the berm makes it hold more. A storm comes tomorrow — end the day and watch it fill. (The dashed ⏭ button on the left skips any lesson.)',
   unlocks:['inspect','swale','berm','clear'],
   objectives:[
-   {t:'Dig a swale, then click just below it to add the berm',hint:'swale',check:()=>countPairs()>=1},
+   {t:'Dig a swale, then click the saved spot just below it to raise the berm',s:'Dig a swale + berm the spot below',hint:'swale',check:()=>countPairs()>=1},
   ]},
  {name:'The Bed',basics:true,par:1,timer:60,
   terrain:Object.assign({},PRACTICE),
@@ -491,7 +495,7 @@ const BASICS=[
   intro:'Lesson 6 — gathering. No tool needed: click a boulder to break it into stone (1⚡), a tree to fell it for wood (2⚡), or driftwood for cheap wood (1⚡). Everything here is finite — what you take does not come back.',
   unlocks:['gather'],
   objectives:[
-   {t:'Gather 2 stone (a boulder) and 2 wood (tree or driftwood)',hint:'',check:()=>S.lv.stone>=2&&S.lv.wood>=2},
+   {t:'Gather 2 stone (a boulder) and 2 wood (tree or driftwood)',s:'Gather 2 stone + 2 wood',hint:'gather',check:()=>S.lv.stone>=2&&S.lv.wood>=2},
   ]},
  {name:'The Rock Dam',basics:true,par:1,timer:60,
   terrain:Object.assign({},PRACTICE,{creeks:1,minCreeks:1}),
@@ -739,6 +743,7 @@ const SFX={
   fanfare(){[523,659,784,1047].forEach((f,i)=>tone(f,0.22,'triangle',0.11,i*0.13));tone(1319,0.4,'triangle',0.09,0.55);},
   lose(){[392,330,262,196].forEach((f,i)=>tone(f,0.3,'triangle',0.1,i*0.22));},
   day(){tone(392,0.14,'sine',0.07);tone(523,0.18,'sine',0.07,0.1);},
+  hint(){tone(660,0.09,'sine',0.045);tone(880,0.12,'sine',0.045,0.1);},
 };
 const tutEl=document.getElementById('tut');
 function isUnlocked(id){return S.mode==='free'||S.unlocked.includes(id);}
@@ -852,8 +857,8 @@ function showChap(title,body){
 }
 function toolHelp(id){
   switch(id){
-    case 'swale':return 'OPEN SAND, not beside the wash. Catches sheet-flow — more open ground uphill = more water. Pays +2 dirt. To BERM the pair (10→18L): right-click the swale, or click the green-marked tile below it. Trees, rocks, driftwood gather on a plain click — no tool needed.';
-    case 'berm':return 'SAND DIRECTLY BELOW A SWALE only (green squares show where). Banks the swale up from 10L to 18L. Costs 1 dirt.';
+    case 'swale':return 'OPEN SAND, not beside the wash. Catches sheet-flow — more open ground uphill = more water. Pays +2 dirt. The tile DIRECTLY BELOW is saved for the berm the moment you dig — nothing else can build there. Right-click the swale (or click the green-marked tile) to raise it: 10→18L. Trees, rocks, driftwood gather on a plain click — no tool needed.';
+    case 'berm':return 'THE SAVED SPOT directly below a swale only (green squares show where) — berms exist nowhere else, and nothing else can take that ground. Banks the swale up from 10L to 18L. Costs 1 dirt.';
     case 'ord':return 'CREEKS ONLY (green squares show where). 2 stone. Slows the little creek, traps its silt, and waters the beds beside it — at 6 silt the dam becomes a grass tile you can farm.';
     case 'gather':return 'Pry stone from boulders (1⚡), cut wood from living trees (2⚡), or grab storm-dropped driftwood cheap (1⚡). Saguaros are off limits, obviously.';
     case 'plant-beans':return 'FAST (2 days) and they FEED THE SOIL — harvesting beans makes their bed and its neighbors fertile. Plant beside corn for the trellis bonus (+1). The rotation starter.';
@@ -878,6 +883,9 @@ function buildBerm(x,y){
   if(nearWash(x,y)){say('Too close to the wash — the bank belongs to the river. Work the slopes; let dams tend the banks.');return;}
   const up=tileAt(x,y-1);
   if(!up||up.type!=='swale'){say('Berms finish a pair — the tile directly below a swale. Dig the swale first!');return;}
+  if(t.deco==='snake'){say('A rattler is coiled on the berm spot — shoo it first (click it, 1⚡). 🐍');return;}
+  if(t.deco&&(TREE_SPECIES.includes(t.deco)||t.deco==='drift')){say('The berm spot is under a tree — 🪓 clear it first with a click.');return;}
+  if(t.deco){say('Something older than you holds the berm spot — it stays, and this swale goes without its bank. Site the next swale with more care. 🌵');return;}
   if(S.dirt<1){say('Need 1 dirt — dig a swale first.');return;}
   if(!spend(1))return;
   t.type='berm';t.deco=null;S.dirt--;SFX.dig();
@@ -982,6 +990,11 @@ function clickTile(x,y){
   }
   if(t.plant&&t.plant.grown>=CROPS[t.plant.crop].days&&tool!=='harvest'&&tool!=='inspect'){
     say('That one is ripe! Right-click it to harvest (any tool selected).');return;
+  }
+  // THE BERM RULE: a swale's downhill tile is spoken for — only the berm goes there.
+  if(['bed','cistern','green','home'].includes(tool)&&bermReserved(t,x,y)){
+    say('This ground is spoken for — the swale just uphill banks its berm here, and nothing else can take the spot. 🧱 Click it to raise the berm (1 dirt), or clear the swale to free the ground.');
+    return;
   }
 
   if(tool==='swale'){
@@ -1132,13 +1145,15 @@ function ctxChoices(t,x,y){
   const ch=[];
   const add=(id,label,cost)=>{ch.push({id,label,cost:cost||''});};
   if(t.type==='sand'&&!t.deco){
-    const up=tileAt(x,y-1);
-    if(isUnlocked('berm')&&up&&up.type==='swale'&&!nearWash(x,y))add('berm','🧱 Berm','banks the swale');
-    if(isUnlocked('swale')&&!nearWash(x,y))add('swale','⛏ Swale','+2 dirt · 1⚡');
-    if(isUnlocked('bed'))add('bed','🟫 Garden bed','1⚡');
-    if(isUnlocked('cistern'))add('cistern','🛢 Cistern','4 bags');
-    if(isUnlocked('green'))add('green','🌡 Greenhouse','6 bags');
-    if(isUnlocked('home')&&countAll(q=>q.type==='home')===0)add('home','🏠 Home site','4/8/6 bags');
+    if(bermReserved(t,x,y)){ // saved spot: the berm, or nothing
+      if(isUnlocked('berm'))add('berm','🧱 Berm','saved spot · 1 dirt');
+    }else{
+      if(isUnlocked('swale')&&!nearWash(x,y))add('swale','⛏ Swale','+2 dirt · 1⚡');
+      if(isUnlocked('bed'))add('bed','🟫 Garden bed','1⚡');
+      if(isUnlocked('cistern'))add('cistern','🛢 Cistern','4 bags');
+      if(isUnlocked('green'))add('green','🌡 Greenhouse','6 bags');
+      if(isUnlocked('home')&&countAll(q=>q.type==='home')===0)add('home','🏠 Home site','4/8/6 bags');
+    }
   }
   else if(t.type==='grass'){
     if(isUnlocked('bed'))add('bed','🟫 Till rich bed','1⚡');
@@ -1212,7 +1227,8 @@ function describe(t,x,y){
         cottonwood:'A cottonwood — the desert´s water-finder, it only grows where the water table is shallow. 🪓 2 wood (2⚡).',
         juniper:'A shaggy juniper — 🪓 fell it for 2 wood (2⚡). It won´t regrow.',
         pinyon:'A pinyon pine — juniper´s upland companion. Pine nuts in a good year.'};
-      return t.deco&&F[t.deco]?F[t.deco]:'Open sand — dig, till, or build here.';
+      if(t.deco&&F[t.deco])return F[t.deco];
+      return bermReserved(t,x,y)?'Open sand — but spoken for: the swale just uphill saves this spot for its 🧱 berm (1 dirt). Nothing else builds here while the swale stands.':'Open sand — dig, till, or build here.';
     }
     case 'rock':return 'A boulder — 🪓 breaks into 2 stone (1⚡), then it\'s gone. Stone is finite here.';
     case 'swale':return `Swale holding ${t.stored}/${swaleCap(x,y)}L of runoff. Waters its side and downhill neighbors — plus same-level ground on flat terraces.`;
@@ -2169,7 +2185,7 @@ function buildTile(x,y){
     }
 
   }
-  if((['berm','bda','ord','home'].includes(S.tool)&&canAct(S.tool,t,x,y))||(S.tool==='swale'&&canAct('berm',t,x,y))){
+  if((['berm','bda','ord','home'].includes(S.tool)&&canAct(S.tool,t,x,y))||(S.tool==='swale'&&canAct('berm',t,x,y))||(bermReserved(t,x,y)&&!t.deco)){
     const sm=new THREE.Mesh(G.otile,M.spotOk);
     sm.rotation.x=-Math.PI/2;
     sm.scale.set(0.55,0.55,1);
@@ -2249,12 +2265,12 @@ function canAct(tool,t,x,y){
     case 'inspect':return true;
     case 'gather':return t.type==='rock'||t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco));
     case 'swale':return t.type==='sand'&&!nearWash(x,y);
-    case 'cistern':return t.type==='sand';
+    case 'cistern':return t.type==='sand'&&!bermReserved(t,x,y);
     case 'ord':return t.type==='creek'&&S.stone>=2;
     case 'berm':{const up=tileAt(x,y-1);return t.type==='sand'&&!nearWash(x,y)&&up&&up.type==='swale';}
-    case 'bed':return t.type==='sand'||t.type==='grass';
-    case 'green':return (t.type==='sand'||t.type==='bed')&&!t.plant;
-    case 'home':return t.type==='home'?t.homeStage<3:(t.type==='sand'&&countAll(q=>q.type==='home')===0);
+    case 'bed':return (t.type==='sand'||t.type==='grass')&&!bermReserved(t,x,y);
+    case 'green':return (t.type==='sand'||t.type==='bed')&&!t.plant&&!bermReserved(t,x,y);
+    case 'home':return t.type==='home'?t.homeStage<3:(t.type==='sand'&&countAll(q=>q.type==='home')===0&&!bermReserved(t,x,y));
     case 'bda':return t.type==='wash'&&!t.dam;
     case 'water':return (t.type==='bed'||t.type==='green');
     case 'harvest':return !!t.plant&&t.plant.grown>=CROPS[t.plant.crop].days;
@@ -2390,7 +2406,7 @@ el.addEventListener('touchmove',e=>{
 },{passive:false});
 el.addEventListener('touchend',e=>{touchN=e.touches.length;if(touchN<2)pinchD=0;},{passive:true});
 el.addEventListener('pointerdown',e=>{
-  hideCtx();
+  hideCtx();noteInput();
   dragging=true;moved=0;painted=false;lastPaint=null;downX=lastX=e.clientX;downY=lastY=e.clientY;
   try{el.setPointerCapture(e.pointerId);}catch(err){}
   if(e.pointerType==='touch'){ // long-press = inspect (the phone's right-click)
@@ -2444,7 +2460,7 @@ el.addEventListener('pointerup',e=>{
 el.addEventListener('pointerleave',()=>{hoverMesh.visible=false;hovered=null;});
 el.addEventListener('wheel',e=>{e.preventDefault();cam.dist+=e.deltaY*0.012;updateCamera();},{passive:false});
 el.addEventListener('contextmenu',e=>{
-  e.preventDefault();
+  e.preventDefault();noteInput();
   const p=pickTile(e);
   if(!p)return;
   const t=tileAt(p.x,p.y);
@@ -2485,7 +2501,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v3.4 · ${S.mode==='campaign'?('level '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'free play'}`;
+  document.getElementById('verlabel').textContent=`v3.6 · ${S.mode==='campaign'?('level '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'free play'}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -2549,14 +2565,149 @@ function refresh(){
       ['cistern','Build a cistern'],['green','Build a greenhouse'],['home','Finish the earthbag home']];
     G2.innerHTML=defs.map(([k,l])=>`<div class="${S.goals[k]?'done':'todo'}">${l}</div>`).join('');
   }
+  updateNowChip();
   rebuildAll();
 }
+
+/* ============ GUIDANCE (v3.6) — pinned Now chip + two-stage idle beacon ============
+   Research-backed: one glanceable objective at all times; after ~8s of hesitation a soft
+   pulse marks a good tile (never a popup, never an input lock); ~22s adds one quiet chime
+   + the full objective line; cancels instantly on any input. Idle nudging is campaign-only —
+   free play stays invitation-only. Tap the chip any time for a pull-hint. */
+let lastInputT=performance.now(), hintStage=0, lastBeaconT=0, beaconFx=null, chipCool=0, _nowKey='';
+function noteInput(){lastInputT=performance.now();hintStage=0;killBeacon();}
+function modalUp(){
+  for(const id of ['intro','chap','report','win','lost','saveovl']){
+    const el2=document.getElementById(id); if(el2&&!el2.classList.contains('hidden'))return true;
+  }
+  return !!document.getElementById('ctx');
+}
+const FREE_GOALS=[['swale','Dig your first swale','swale'],['rain','Catch a monsoon rain','end'],
+  ['bda','Dam the wash (BDA)','bda'],['harvest','Harvest a crop','harvest'],
+  ['cistern','Build a cistern','cistern'],['green','Build a greenhouse','green'],['home','Finish the earthbag home','home']];
+function nowObjective(){
+  if(S.mode==='campaign'){
+    const objs=chapterObjectives(); if(!objs)return null;
+    for(let i=0;i<objs.length;i++)if(!objs[i].check())
+      return {key:S.chapter+':'+i,text:objs[i].s||objs[i].t,full:objs[i].t,hint:objs[i].hint};
+    return null;
+  }
+  if(S.mode==='free'){
+    for(const [k,l,h] of FREE_GOALS)if(!S.goals[k])return {key:'free:'+k,text:l,full:l,hint:h};
+  }
+  return null;
+}
+function bestPairSpot(){ // swale site with the longest clean uphill fetch and a free saved spot below
+  let best=null,bf=-1;
+  for(let y=1;y<ROWS-1;y++)for(let x=0;x<COLS;x++){
+    const t=tileAt(x,y),b=tileAt(x,y+1);
+    if(!t||t.type!=='sand'||t.deco||nearWash(x,y))continue;
+    if(!b||b.type!=='sand'||b.deco||nearWash(x,y+1))continue;
+    let f=0;for(let yy=y-1;yy>=0;yy--){const u=tileAt(x,yy);if(!u||['wash','creek','swale'].includes(u.type))break;f++;}
+    if(f>bf){bf=f;best={x,y};}
+  }
+  return best;
+}
+function findTile(fn){for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){const t=S.grid[y][x];if(t&&fn(t,x,y))return {x,y};}return null;}
+function hintTarget(h){
+  if(!h)return null;
+  if(h==='end'||S.energy<1)return 'end';
+  switch(h){
+    case 'swale':{
+      const open=findTile((t,x,y)=>t.type==='swale'&&(()=>{const b=tileAt(x,y+1);return b&&bermReserved(b,x,y+1)&&!b.deco;})());
+      if(open)return {x:open.x,y:open.y+1}; // an unfinished pair — its saved spot is the move
+      return bestPairSpot();
+    }
+    case 'bed':
+      return findTile((t,x,y)=>t.type==='sand'&&!t.deco&&!bermReserved(t,x,y)&&!nearWash(x,y)&&neighbors(x,y).some(n=>n.type==='swale'))
+        ||findTile((t,x,y)=>!t.deco&&canAct('bed',t,x,y));
+    case 'water':return findTile(t=>(t.type==='bed'||t.type==='green')&&t.plant&&t.moisture<2)
+        ||findTile(t=>t.type==='bed'&&t.plant);
+    case 'harvest':return findTile(t=>!!t.plant&&t.plant.grown>=CROPS[t.plant.crop].days)
+        ||findTile(t=>!!t.plant);
+    case 'gather':return (S.lv.stone<2?findTile(t=>t.type==='rock'):null)
+        ||findTile(t=>t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco)))
+        ||findTile(t=>t.type==='rock');
+    case 'ord':return (S.stone<2?findTile(t=>t.type==='rock'):null)
+        ||findTile((t,x,y)=>canAct('ord',t,x,y))||findTile(t=>t.type==='creek');
+    case 'bda':return (S.wood<3?findTile(t=>t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco))):null)
+        ||findTile(t=>t.type==='wash'&&!t.dam);
+    case 'home':return findTile(t=>t.type==='home'&&t.homeStage<3)
+        ||(S.bags>=4?findTile((t,x,y)=>canAct('home',t,x,y)):null); // short on bags → the dock button is already highlighted
+    case 'cistern':case 'green':return S.bags>=(h==='cistern'?4:6)?findTile((t,x,y)=>canAct(h,t,x,y)):null;
+    default:
+      if(h.startsWith('plant-'))return S.seeds>0?findTile(t=>(t.type==='bed'||t.type==='green')&&!t.plant):null;
+      return null;
+  }
+}
+const beaconGeo=new THREE.RingGeometry(0.34,0.46,28);
+function killBeacon(){
+  if(beaconFx){scene.remove(beaconFx.mesh);beaconFx.mesh.material.dispose();beaconFx=null;}
+  const fab=document.getElementById('endFab'); if(fab)fab.classList.remove('hintPulse');
+}
+function fireBeacon(){
+  killBeacon();
+  const o=nowObjective(); if(!o)return false;
+  const tgt=hintTarget(o.hint); if(!tgt)return false;
+  if(tgt==='end'){
+    const fab=document.getElementById('endFab');
+    fab.classList.remove('hintPulse');void fab.offsetWidth;fab.classList.add('hintPulse');
+    setTimeout(()=>fab.classList.remove('hintPulse'),2600);
+    return true;
+  }
+  const t=tileAt(tgt.x,tgt.y); if(!t)return false;
+  const m=new THREE.Mesh(beaconGeo,new THREE.MeshBasicMaterial({color:0x3f9a5f,transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}));
+  m.rotation.x=-Math.PI/2;
+  m.position.set(gx(tgt.x),t.elev+0.45,gz(tgt.y));
+  scene.add(m);
+  beaconFx={mesh:m,t0:performance.now()};
+  return true;
+}
+function guidanceTick(){
+  if(!S.mode||modalUp()||S.won)return;
+  if(S.mode!=='campaign'||chapterDone())return; // idle nudges are campaign-only
+  const now=performance.now(), idle=now-lastInputT;
+  if(idle<8000)return;
+  if(hintStage===0){fireBeacon();hintStage=1;lastBeaconT=now;return;}
+  if(hintStage===1&&idle>22000){
+    const o=nowObjective();
+    if(o&&fireBeacon()){SFX.hint();say('🎯 '+o.full);}
+    hintStage=2;lastBeaconT=now;return;
+  }
+  if(hintStage===2&&now-lastBeaconT>14000){fireBeacon();lastBeaconT=now;}
+}
+function updateNowChip(){
+  const chip=document.getElementById('nowchip'), txt=document.getElementById('nowtext');
+  if(!chip)return;
+  const o=nowObjective();
+  if(!o){chip.classList.add('hidden');_nowKey='';return;}
+  chip.classList.remove('hidden');
+  if(o.key!==_nowKey){
+    txt.textContent=o.text;
+    if(_nowKey){chip.classList.remove('pop');void chip.offsetWidth;chip.classList.add('pop');}
+    _nowKey=o.key;
+  }
+}
+document.getElementById('nowchip').addEventListener('click',()=>{
+  const now=performance.now(); if(now<chipCool)return; chipCool=now+4000;
+  const o=nowObjective(); if(!o)return;
+  say('🎯 '+o.full);
+  fireBeacon(); // if nothing marks, the say line + highlighted dock button carry it
+});
 
 /* --- loop --- */
 let tick=0;
 function animate(){
   requestAnimationFrame(animate);
   tick++;
+  if(beaconFx){
+    const el2=(performance.now()-beaconFx.t0)/1000;
+    if(el2>2.4)killBeacon();
+    else{const p=(el2%0.8)/0.8;
+      beaconFx.mesh.scale.setScalar(0.9+p*0.95);
+      beaconFx.mesh.material.opacity=0.85*(1-p);}
+  }
+  if((tick&15)===0)guidanceTick();
   for(const a of animated){
     a.mesh.position.y=a.baseY+Math.sin(tick*0.06+a.phase)*0.05;
     a.mesh.rotation.y+=0.03;
