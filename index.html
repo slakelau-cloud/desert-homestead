@@ -205,6 +205,13 @@
     #legend{font-size:9.5px;white-space:normal;text-align:center;bottom:88px;}
     .ovl .box{padding:16px 18px;font-size:13px;}
   }
+  #ctx{position:absolute;z-index:30;background:var(--card,#fffdf4);border:1.5px solid #dcc891;border-radius:12px;
+    box-shadow:0 6px 22px rgba(90,60,20,.28);padding:5px;display:flex;flex-direction:column;gap:4px;min-width:150px;}
+  #ctx button{display:flex;justify-content:space-between;gap:10px;align-items:baseline;border:1px solid #e6d7b0;
+    background:#fffdf4;border-radius:9px;padding:6px 9px;font-size:13px;cursor:pointer;text-align:left;}
+  #ctx button:hover{background:#fff3d1;border-color:#dcc891;}
+  #ctx button .cost{font-size:10.5px;color:#8a6b52;white-space:nowrap;}
+  #ctx .ctxcap{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#9c7a4f;margin:1px 2px 0;}
 </style>
 </head>
 <body>
@@ -223,7 +230,7 @@
       <div id="bcSep2"></div>
       <div id="chips"></div>
     </div>
-    <div id="status">Pick a tool from the dock on the right, then tap the land. Drag to orbit.</div>
+    <div id="status">Just click the land — it offers what fits. Drag to orbit.</div>
     <div id="camhint">drag orbit · shift-drag paints · rt-click: harvest / berm-a-swale · space ends day</div>
     <div id="legend" class="hidden">💧 Water view — <b style="color:#2e6f9e">blue = wet</b> · <b style="color:#c14a2a">red = thirsty plant</b> · arrows = flow (V toggles)</div>
     <button id="nextlvl" class="hidden">⭐ LEVEL COMPLETE — Next level!</button>
@@ -273,7 +280,7 @@
     🌱 <b>Crops drink</b> — 2 moisture a day — so put water where the roots are.&nbsp;
     🧱 <b>Earthbags</b> raise your home from the dirt your swales pay you.</p>
     <p><b>Field school first</b> — eight tiny one-click lessons, one per tool. <b>Then ten levels</b> climbing from saguaro country to the pinyon-juniper rim. Deterministic storms — the forecast is a promise. Finish at par pace for ⭐⭐⭐, and mind the rattlers. 🐍</p>
-    <p style="font-size:12.5px;color:#8a6b52;"><b>Drag</b> orbits · <b>scroll</b> zooms · <b>click</b> works the land · <b>shift-drag</b> paints · <b>space</b> ends the day · ⏱ turns on the countdown clock if you want the pressure.</p>
+    <p style="font-size:12.5px;color:#8a6b52;"><b>Drag</b> orbits · <b>scroll</b> zooms · <b>click</b> works the land — it offers what fits · <b>shift-drag</b> repeats your last move · <b>space</b> ends the day · ⏱ turns on the countdown clock if you want the pressure.</p>
     <button onclick="startMode('campaign')">Play the campaign</button>
     <button onclick="startMode('free')" style="background:#fffdf4;color:var(--ink);border-color:#dcc891;">Free play — everything unlocked</button>
     <p id="nojs" style="margin:14px 0 0;font-size:12px;background:#fff2df;border:1px solid #e8bd63;border-radius:9px;padding:8px 10px;">

@@ -239,6 +239,7 @@ const FARM_TOOLS=['plant-beans','plant-squash','plant-corn','plant-pear'];
 const BUILD_TOOLS=['cistern','green','home'];
 let confirmRestart=false;
 function buildToolbar(){
+  // no tool menus — the land is the interface. The dock only holds camp actions (earthbag, haul).
   const workbar=document.getElementById('workbar');
   toolbar.innerHTML='';workbar.innerHTML='';
   const objs=chapterObjectives();
@@ -249,35 +250,11 @@ function buildToolbar(){
     g.appendChild(capEl);
     const b=document.createElement('div');b.className='btns';g.appendChild(b);parent.appendChild(g);
     b._grp=g; return b;};
-  const tb=(cont,t)=>{const b=document.createElement('button');
-    b.innerHTML=`<b>${t.label}</b><span class="cost">${t.hint||'&nbsp;'}</span>`;
-    b.className=(S.tool===t.id?'sel':'')+(hint===t.id?' hintbtn':'');
-    b.onclick=()=>{S.tool=t.id;buildToolbar();rebuildAll();say(toolHelp(t.id));};
-    cont.appendChild(b);};
-  // LEFT: earthworks
-  const g1=mk(toolbar,'⛏ Earthworks');
-  for(const t of TOOLS){
-    if(FARM_TOOLS.includes(t.id)||BUILD_TOOLS.includes(t.id))continue;
-    if(!isUnlocked(t.id))continue;
-    tb(g1,t);
-  }
-  // LEFT: homestead buildings (appears once something is unlocked)
-  const builds=TOOLS.filter(t=>BUILD_TOOLS.includes(t.id)&&isUnlocked(t.id));
-  if(builds.length){
-    const gh=mk(toolbar,'🏠 Buildings');
-    for(const t of builds)tb(gh,t);
-  }
-  // RIGHT: farm work — seed count lives here, with the plants
-  const gf=mk(workbar,`🌱 Plant & grow — 🌰 ${S.seeds} seed${S.seeds===1?'':'s'}`);
-  for(const id of FARM_TOOLS){
-    const t=TOOLS.find(x=>x.id===id);
-    if(!t||!isUnlocked(id))continue;
-    tb(gf,t);
-  }
-  if(S.seeds<1)gf.querySelectorAll('button').forEach(b2=>{if(!b2.classList.contains('sel'))b2.classList.add('blocked');});
-  // RIGHT: instant
   const acts=ACTIONS.filter(a=>isUnlocked(a.id));
-  const g2=mk(workbar,acts.length?'⚡ Camp actions':'🌙 Day');
+  document.getElementById('dock').style.display=acts.length?'':'none';
+  document.getElementById('dockTab').style.display='none';
+  const g2=acts.length?mk(workbar,'⚡ Camp actions'):null;
+  if(!g2){toolbarTail(hint);return;}
   for(const a of acts){
     const b=document.createElement('button');
     b.className='action'+(hint===a.id?' hintbtn':'');
@@ -291,6 +268,9 @@ function buildToolbar(){
     }
     g2.appendChild(b);
   }
+  toolbarTail(hint);
+}
+function toolbarTail(hint){
   const fab=document.getElementById('endFab');
   if(S.mode==='campaign'&&S.chapter<CHAPTERS.length&&chapterDone()){
     fab.className='gold';
@@ -459,7 +439,7 @@ const BASICS=[
   terrain:Object.assign({},PRACTICE),
   start:{water:6,seeds:0,dirt:0,energy:6},
   script:{rains:[2]},
-  intro:'Field school, lesson 1 — the shovel. Pick ⛏ Swale in the toolbox, click any open sand to dig it, then click the tile JUST BELOW your swale to bank a berm. That pair is the whole game: the swale catches rain, the berm makes it hold more. A storm comes tomorrow — end the day and watch it fill. (The dashed ⏭ button on the left skips any lesson.)',
+  intro:'Field school, lesson 1 — the swale. There are no menus here: just click the land. Click any open sand to dig a swale, then click the tile JUST BELOW it and pick 🧱 Berm. That pair is the whole game: the swale catches rain, the berm makes it hold more. A storm comes tomorrow — end the day and watch it fill. (The dashed ⏭ button on the left skips any lesson.)',
   unlocks:['inspect','swale','berm','clear'],
   objectives:[
    {t:'Dig a swale, then click just below it to add the berm',hint:'swale',check:()=>countPairs()>=1},
@@ -468,7 +448,7 @@ const BASICS=[
   terrain:Object.assign({},PRACTICE),
   start:{water:6,seeds:0,dirt:0,energy:6},
   script:{rains:[]},
-  intro:'Lesson 2 — the garden bed. Pick 🟫 Bed and click open sand to till it. Beds are where seeds go — nothing grows on raw desert.',
+  intro:'Lesson 2 — the garden bed. Click open sand: now the land offers a choice — ⛏ Swale or 🟫 Garden bed. Pick the bed and till it. Beds are where seeds go — nothing grows on raw desert.',
   unlocks:['bed'],
   objectives:[
    {t:'Till one bed on open sand',hint:'bed',check:()=>countAll(t=>t.type==='bed')>=1},
@@ -478,7 +458,7 @@ const BASICS=[
   start:{water:6,seeds:1,dirt:0,energy:6},
   script:{rains:[]},
   setup(){const t=openSpot();if(t){t.type='bed';t.moisture=4;}},
-  intro:'Lesson 3 — planting. We tilled a bed for you (the dark square). Pick 🫘 Beans in the PLANT & GROW menu on the right, then click the bed. One seed, one click.',
+  intro:'Lesson 3 — planting. We tilled a bed for you (the dark square). Click it and pick 🌱 Beans. One seed, one click.',
   unlocks:['plant-beans'],
   objectives:[
    {t:'Plant beans in the ready bed',hint:'plant-beans',check:()=>countAll(t=>!!t.plant)>=1},
@@ -488,7 +468,7 @@ const BASICS=[
   start:{water:6,seeds:0,dirt:0,energy:6},
   script:{rains:[]},
   setup(){const t=openSpot();if(t){t.type='bed';t.moisture=0;t.plant={crop:'beans',stage:0,grown:1,wilt:0};}},
-  intro:'Lesson 4 — water. The bean bed we left you is bone dry, so it wears a 💧 tag. Click the 💧 tag itself to give it a 3L soak — thirsty crops always ask like this. No tag means nobody is thirsty.',
+  intro:'Lesson 4 — water. The bean bed we left you is bone dry, so it wears a 💧 tag. Click the plant (or its tag) to give it a 3L soak — clicking any growing crop waters it. No tag means nobody is thirsty.',
   unlocks:['water'],
   objectives:[
    {t:'Click the 💧 tag to water the thirsty bed',hint:'water',check:()=>S.lv.watered>=1},
@@ -516,7 +496,7 @@ const BASICS=[
   terrain:Object.assign({},PRACTICE,{creeks:1,minCreeks:1}),
   start:{water:6,seeds:0,dirt:0,stone:2,energy:6},
   script:{rains:[2]},
-  intro:'Lesson 7 — the rock dam. Pick 🪨 Rock dam and click a CREEK tile (the thin channel). One rock high, it slows storm water and traps silt that slowly becomes farmland. Creeks only — the big wash would blow it out.',
+  intro:'Lesson 7 — the rock dam. You have 2 stone. Click a CREEK tile (the thin channel) and the dam goes up on the spot — one rock high, it slows storm water and traps silt that slowly becomes farmland. Creeks only — the big wash would blow it out.',
   unlocks:['ord'],
   objectives:[
    {t:'Build a rock dam in the creek',hint:'ord',check:()=>S.lv.creekOrds>=1},
@@ -525,7 +505,7 @@ const BASICS=[
   terrain:Object.assign({},PRACTICE),
   start:{water:6,seeds:0,dirt:1,wood:3,energy:6},
   script:{rains:[2]},
-  intro:'Lesson 8 — the beaver-dam analog. The wide sandy channel is the WASH. Pick 🪵 BDA and click a wash tile: 3 wood and 1 dirt build a dam that ponds the next storm and greens its banks. That is every tool — the real levels start next.',
+  intro:'Lesson 8 — the beaver-dam analog. The wide sandy channel is the WASH. Click a wash tile: your 3 wood and 1 dirt build the dam right there. It ponds the next storm and greens its banks. That is everything — the real levels start next.',
   unlocks:['bda'],
   objectives:[
    {t:'Build a BDA in the wash',hint:'bda',check:()=>countAll(t=>t.dam)>=1},
@@ -1137,6 +1117,79 @@ function clickTile(x,y){
   refresh();
 }
 
+let lastTool=null;
+function doTool(id,x,y){
+  const prev=S.tool; S.tool=id; clickTile(x,y); S.tool=prev;
+  if(['swale','bed','ord','berm','water'].includes(id)||id.startsWith('plant-'))lastTool=id;
+}
+function hideCtx(){const c=document.getElementById('ctx');if(c)c.remove();}
+function ctxChoices(t,x,y){
+  const ch=[];
+  const add=(id,label,cost)=>{ch.push({id,label,cost:cost||''});};
+  if(t.type==='sand'&&!t.deco){
+    const up=tileAt(x,y-1);
+    if(isUnlocked('berm')&&up&&up.type==='swale'&&!nearWash(x,y))add('berm','🧱 Berm','banks the swale');
+    if(isUnlocked('swale')&&!nearWash(x,y))add('swale','⛏ Swale','+2 dirt · 1⚡');
+    if(isUnlocked('bed'))add('bed','🟫 Garden bed','1⚡');
+    if(isUnlocked('cistern'))add('cistern','🛢 Cistern','4 bags');
+    if(isUnlocked('green'))add('green','🌡 Greenhouse','6 bags');
+    if(isUnlocked('home')&&countAll(q=>q.type==='home')===0)add('home','🏠 Home site','4/8/6 bags');
+  }
+  else if(t.type==='grass'){
+    if(isUnlocked('bed'))add('bed','🟫 Till rich bed','1⚡');
+    if(isUnlocked('clear'))add('clear','🧹 Clear','1⚡');
+  }
+  else if((t.type==='bed'||t.type==='green')&&!t.plant){
+    for(const id of FARM_TOOLS){
+      if(!isUnlocked(id))continue;
+      const c=CROPS[id.slice(6)];
+      add(id,`🌱 ${c.name}`,`1 seed · ${c.days}d`);
+    }
+    if(isUnlocked('water'))add('water','💧 Water','3L · 1⚡');
+    if(t.type==='bed'&&isUnlocked('clear'))add('clear','🧹 Clear','1⚡');
+  }
+  else if(['swale','berm','ord'].includes(t.type)){
+    if(isUnlocked('clear'))add('clear','🧹 Clear','1⚡'+(t.type==='berm'?' · +1 dirt':''));
+  }
+  else if(t.type==='wash'&&t.dam){
+    if(isUnlocked('clear'))add('clear','🧹 Pull the dam','1⚡ · +1 dirt');
+  }
+  return ch;
+}
+function showCtx(t,x,y,cx,cy){
+  hideCtx();
+  const ch=ctxChoices(t,x,y);
+  if(!ch.length){say(describe(t,x,y));return;}
+  if(ch.length===1&&!['clear'].includes(ch[0].id)){doTool(ch[0].id,x,y);return;} // one obvious constructive move: just do it
+  const box=document.createElement('div');box.id='ctx';
+  const cap=document.createElement('div');cap.className='ctxcap';cap.textContent='This tile:';box.appendChild(cap);
+  for(const o of ch){
+    const b=document.createElement('button');
+    b.innerHTML=`<span>${o.label}</span><span class="cost">${o.cost}</span>`;
+    b.addEventListener('pointerdown',e=>e.stopPropagation());
+    b.addEventListener('click',e=>{e.stopPropagation();hideCtx();doTool(o.id,x,y);});
+    box.appendChild(b);
+  }
+  view.appendChild(box);
+  const vr=view.getBoundingClientRect();
+  let px=cx-vr.left+10, py=cy-vr.top-10;
+  px=Math.min(px,vr.width-box.offsetWidth-8); py=Math.max(6,Math.min(py,vr.height-box.offsetHeight-8));
+  box.style.left=px+'px'; box.style.top=py+'px';
+}
+function smartClick(x,y,cx,cy){
+  const t=tileAt(x,y); if(!t)return;
+  // instant, unambiguous moves first — the map decides
+  if(t.deco==='snake'){doTool('bed',x,y);return;} // any work-click shoos the rattler
+  if(t.type==='rock'||t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco))){doTool('gather',x,y);return;}
+  if(t.plant&&t.plant.grown>=CROPS[t.plant.crop].days){doTool('harvest',x,y);return;}
+  if(t.plant){ if(t.moisture>=5&&t.type!=='green'){say(describe(t,x,y));} else doTool('water',x,y); return; } // click a growing crop = give it a drink
+  if(t.type==='home'&&t.homeStage>0){doTool('home',x,y);return;}
+  if(t.type==='creek'){ if(isUnlocked('ord'))doTool('ord',x,y); else say(describe(t,x,y)); return; }
+  if(t.type==='wash'&&!t.dam){ if(isUnlocked('bda'))doTool('bda',x,y); else say(describe(t,x,y)); return; }
+  if(t.type==='hardpan'||t.type==='eroded'||t.type==='cistern'){say(describe(t,x,y));return;}
+  showCtx(t,x,y,cx,cy);
+}
+window.smartClick=smartClick;
 function describe(t,x,y){
   const m=`moisture ${t.moisture}/6`;
   switch(t.type){
@@ -2329,6 +2382,7 @@ el.addEventListener('touchmove',e=>{
 },{passive:false});
 el.addEventListener('touchend',e=>{touchN=e.touches.length;if(touchN<2)pinchD=0;},{passive:true});
 el.addEventListener('pointerdown',e=>{
+  hideCtx();
   dragging=true;moved=0;painted=false;lastPaint=null;downX=lastX=e.clientX;downY=lastY=e.clientY;
   try{el.setPointerCapture(e.pointerId);}catch(err){}
   if(e.pointerType==='touch'){ // long-press = harvest (the phone's right-click)
@@ -2353,9 +2407,9 @@ el.addEventListener('pointermove',e=>{
   if(dragging){
     if(touchN>=2){lastX=e.clientX;lastY=e.clientY;return;} // pinch owns the gesture
     if(moved>9&&pressTimer){clearTimeout(pressTimer);pressTimer=null;}
-    if(e.shiftKey&&['swale','bed','ord','berm','plant-beans','plant-squash','plant-pear','water'].includes(S.tool)){
+    if(e.shiftKey&&lastTool){
       const p=pickTile(e);
-      if(p&&(!lastPaint||lastPaint.x!==p.x||lastPaint.y!==p.y)){lastPaint=p;painted=true;clickTile(p.x,p.y);}
+      if(p&&(!lastPaint||lastPaint.x!==p.x||lastPaint.y!==p.y)){lastPaint=p;painted=true;doTool(lastTool,p.x,p.y);}
       lastX=e.clientX;lastY=e.clientY;
       return;
     }
@@ -2376,7 +2430,7 @@ el.addEventListener('pointerup',e=>{
   if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}
   if(moved<=9&&!painted){
     const p=pickTile(e);
-    if(p)clickTile(p.x,p.y);
+    if(p)smartClick(p.x,p.y,e.clientX,e.clientY);
   }
 });
 el.addEventListener('pointerleave',()=>{hoverMesh.visible=false;hovered=null;});
@@ -2388,7 +2442,7 @@ el.addEventListener('contextmenu',e=>{
   const t=tileAt(p.x,p.y);
   if(t&&t.plant){ if(doHarvest(t))refresh(); }
   else if(t&&t.type==='swale'){ buildBerm(p.x,p.y+1); }
-  else say('Right-click: harvest a ripe plant, or complete a swale into a pair (berm below).');
+  else if(t)say(describe(t,p.x,p.y));
 });
 
 const raycaster=new THREE.Raycaster(), pointer=new THREE.Vector2();
@@ -2421,8 +2475,9 @@ function updateHover(e){
 /* --- HUD --- */
 let prevRes={};
 function refresh(){
+  hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v3.2 · ${S.mode==='campaign'?('level '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'free play'}`;
+  document.getElementById('verlabel').textContent=`v3.3 · ${S.mode==='campaign'?('level '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'free play'}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -2431,6 +2486,7 @@ function refresh(){
   document.getElementById('chips').innerHTML=
     `<span class="chip${bump('water')}" data-k="water">💧 ${S.water}<small>/${S.waterCap}L</small></span>`+
     `<span class="chip${bump('food')}" data-k="food">🥣 ${S.food} <small>food</small></span>`+
+    `<span class="chip${bump('seeds')}" data-k="seeds">🌰 ${S.seeds} <small>seeds</small></span>`+
     `<span class="chip${bump('dirt')}" data-k="dirt">🟤 ${S.dirt} <small>dirt</small></span>`+
     (showStone?`<span class="chip${bump('stone')}" data-k="stone">🪨 ${S.stone} <small>stone</small></span>`:'')+
     (showWood?`<span class="chip${bump('wood')}" data-k="wood">🪵 ${S.wood} <small>wood</small></span>`:'')+
