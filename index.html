@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#fefae0">
+<title>Desert Homestead 3D — Prototype</title>
+<style>
+  :root{
+    --dusk:#9c6644; --terra:#bc6c25; --ink:#432818; --green:#606c38;
+    --card:#fffdf4; --shadow:0 2px 8px rgba(67,40,24,.18);
+  }
+  *{box-sizing:border-box; -webkit-user-select:none; user-select:none;}
+  html,body{margin:0;padding:0;height:100%;overflow:hidden;background:#f6e7c1;color:var(--ink);
+    font-family:"Avenir Next","Segoe UI",system-ui,sans-serif;}
+  #app{position:fixed;inset:0;}
+  #view{position:absolute;inset:0;}
+  #view canvas{position:absolute;inset:0;display:block;cursor:pointer;touch-action:none;}
+  #hud{position:absolute;top:6px;left:6px;right:176px;z-index:4;display:flex;gap:5px;align-items:center;flex-wrap:wrap;pointer-events:none;}
+  .pill,#chips .chip{pointer-events:auto;background:rgba(255,253,244,.9);border:1px solid #e6d7b0;border-radius:14px;
+    padding:3px 10px;font-size:12.5px;font-weight:700;box-shadow:var(--shadow);white-space:nowrap;}
+  #wpill{cursor:pointer;}
+  #timerpill{display:none !important;}
+  #bigClock{position:absolute;top:44px;left:50%;transform:translateX(-50%);z-index:4;
+    display:flex;align-items:center;gap:14px;background:rgba(255,253,244,.94);
+    border:2px solid #dcc891;border-radius:16px;padding:6px 18px;box-shadow:0 3px 12px rgba(67,40,24,.28);}
+  #bcTime{font-size:26px;font-weight:800;color:#8a5a00;min-width:86px;text-align:center;font-variant-numeric:tabular-nums;}
+  #bcTime.low{color:#c22a10;animation:cwarn .7s ease infinite;}
+  #bcSep,#bcSep2{width:2px;height:30px;background:#e6d7b0;border-radius:2px;}
+  #bigClock #chips{display:flex;gap:5px;align-items:center;flex-wrap:nowrap;}
+  #bigClock #chips .chip{font-size:11.5px;padding:2px 8px;}
+  #bcEnergy{display:flex;align-items:center;gap:8px;}
+  #bcEnum{font-size:22px;font-weight:800;color:#3f6b1f;font-variant-numeric:tabular-nums;}
+  #bcEnum.low{color:#c22a10;}
+  #bcEnergy.warn{animation:cwarn .9s ease;}
+  #stormToast{position:absolute;top:96px;left:50%;transform:translateX(-50%);z-index:7;width:min(360px,86%);
+    background:rgba(255,251,238,.97);border:2px solid #7db3d8;border-radius:14px;padding:9px 14px;
+    box-shadow:0 5px 18px rgba(30,80,120,.3);font-size:12.5px;line-height:1.45;cursor:pointer;
+    animation:toastin .4s cubic-bezier(.2,1.4,.4,1) both;}
+  #stormToast b.t{font-size:13.5px;}
+  #flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:8;}
+  #flash.go{animation:lflash .5s ease-out;}
+  @keyframes lflash{0%{opacity:0;}6%{opacity:.75;}12%{opacity:.08;}20%{opacity:.5;}100%{opacity:0;}}
+  #duskfade{position:absolute;inset:0;background:linear-gradient(rgba(70,40,60,0),rgba(120,60,40,.55));opacity:0;pointer-events:none;z-index:8;transition:opacity .6s ease;}
+  #duskfade.go{opacity:1;}
+  @keyframes toastin{0%{opacity:0;transform:translateX(-50%) translateY(-14px);}100%{opacity:1;transform:translateX(-50%) translateY(0);}}
+  .fxpop.bad{color:#a04a2a;border-color:#d08a6a;}
+  #bcPips{display:flex;gap:3px;}
+  #bcPips .pip{width:9px;height:16px;border-radius:4px;background:#8fbf4d;border:1px solid #6a9636;}
+  #bcPips .pip.off{background:#e8dfc6;border-color:#d5c9a8;}
+  #bigClock.freeplay #bcTime,#bigClock.freeplay #bcSep,#bigClock.freeplay #rtBtn{display:none;}
+  #bigClock.notimer #bcTime,#bigClock.notimer #bcSep{display:none;}
+  #rtBtn{width:34px;height:34px;border-radius:10px;font-size:17px;padding:0;text-align:center;background:#f3ecd8;border-color:#d5c9a8;color:#9b8264;}
+  #rtBtn.on{background:var(--terra);border-color:var(--terra);color:#fff;}
+  #timebar{position:absolute;top:0;left:0;height:4px;background:linear-gradient(90deg,#e9a13b,#d9773b);
+    z-index:6;transition:width .25s linear;border-radius:0 3px 3px 0;}
+  .pill.brand{color:var(--dusk);}
+  .pill small,#chips .chip small{font-weight:600;color:#8a6b52;}
+
+  .chip.bump{animation:cbump .45s ease;}
+  @keyframes cbump{0%{transform:scale(1);}35%{transform:scale(1.18);background:#ffedb8;}100%{transform:scale(1);}}
+  .chip.warn{animation:cwarn .9s ease;}
+  .chip[data-k]{pointer-events:auto;}
+  @keyframes cwarn{0%,60%{background:#ffd4c4;border-color:#e08a63;transform:scale(1.12);}100%{transform:scale(1);}}
+  #tut{position:absolute;top:66px;left:6px;right:176px;z-index:4;background:rgba(255,243,209,.94);
+    border:1.5px solid #e8bd63;border-radius:11px;padding:6px 10px;font-size:12.5px;line-height:1.4;
+    box-shadow:var(--shadow);display:flex;align-items:center;gap:8px;}
+  #tut .step{font-weight:700;color:#8a5a00;white-space:nowrap;}
+  #tut .txt{flex:1;}
+  #tut .skip{background:none;border:none;box-shadow:none;color:#8a6b52;font-size:11px;
+    text-decoration:underline;padding:1px 3px;white-space:nowrap;cursor:pointer;}
+  #leftRail{position:absolute;left:6px;bottom:104px;z-index:5;display:flex;flex-direction:column;gap:4px;}
+  #leftRail button{width:34px;height:34px;border-radius:10px;font-size:15px;background:rgba(255,253,244,.92);
+    border:1.5px solid #dcc891;box-shadow:var(--shadow);cursor:pointer;padding:0;text-align:center;}
+  #leftRail button.sel{background:var(--terra);border-color:var(--terra);}
+  #leftRail #skiptest{font-size:15px;border-style:dashed;color:#8a6b52;}
+  #dock{position:absolute;top:6px;right:6px;max-height:calc(100% - 102px);width:168px;z-index:5;display:flex;align-items:flex-start;
+    transition:transform .22s ease;}
+  #dock.collapsed{transform:translateX(146px);}
+  #dockTab{width:22px;flex:0 0 22px;border-radius:10px 0 0 10px;background:var(--card);border:1.5px solid #dcc891;
+    border-right:none;cursor:pointer;font-size:11px;color:#8a6b52;padding:0;box-shadow:var(--shadow);text-align:center;}
+  #dockInner{flex:1;overflow-y:auto;max-height:calc(100vh - 114px);display:flex;flex-direction:column;gap:5px;
+    background:rgba(255,251,235,.72);border:1.5px solid #e6d7b0;border-radius:0 12px 12px 12px;padding:5px;}
+  #workbar,#toolbar{display:flex;flex-direction:column;gap:5px;}
+  .toolgroup{border:1px dashed #d9c48c;border-radius:10px;padding:4px 5px 5px;background:rgba(255,253,244,.65);}
+  .toolgroup .cap{font-size:9.5px;font-weight:700;letter-spacing:.5px;text-transform:uppercase;color:#9c7a4f;margin:0 0 4px 2px;}
+  .toolgroup .btns{display:grid;grid-template-columns:1fr;gap:4px;}
+  button{font-family:inherit;font-weight:600;color:var(--ink);background:var(--card);
+    border:1.5px solid #dcc891;border-radius:9px;cursor:pointer;box-shadow:var(--shadow);
+    transition:transform .06s, background .12s;text-align:left;}
+  button:active{transform:scale(.96);}
+  @media (hover:hover){ .btns button:hover{transform:translateY(-1px);box-shadow:0 3px 10px rgba(67,40,24,.28);} }
+  .btns button{padding:4px 6px;}
+  .btns button b{display:block;font-size:12px;font-weight:700;line-height:1.2;}
+  .btns button .cost{display:block;font-size:9.5px;color:#9b8264;font-weight:600;line-height:1.15;min-height:10px;}
+  .btns button.sel{background:var(--terra);color:#fff;border-color:var(--terra);}
+  .btns button.sel .cost{color:#f4e3c8;}
+  button.action{background:#eaf4ea;border-color:#8fae86;}
+  button.action.blocked{background:#efece2;border-color:#d5cbb4;color:#a4977f;box-shadow:none;}
+  .btns button.blocked{background:#efece2;border-color:#d5cbb4;color:#a4977f;box-shadow:none;opacity:.75;}
+  .btns button.blocked .cost{color:#b3a68c;}
+  button.hintbtn{border-color:#f2a316;animation:pulseb 1.2s ease-in-out infinite;}
+  @keyframes pulseb{0%,100%{box-shadow:0 0 0 3px rgba(242,163,22,.4);}50%{box-shadow:0 0 0 7px rgba(242,163,22,.1);}}
+  #endFab{position:absolute;right:10px;bottom:10px;z-index:6;width:74px;height:74px;border-radius:50%;
+    background:var(--green);color:#fff;border:2.5px solid #4b5a2b;font-size:22px;display:flex;flex-direction:column;
+    align-items:center;justify-content:center;box-shadow:0 5px 16px rgba(0,0,0,.35);cursor:pointer;text-align:center;}
+  #endFab small{font-size:9.5px;font-weight:800;letter-spacing:.3px;}
+  #endFab.gold{background:#d9a520;border-color:#a87e12;animation:pulseb 1.1s ease-in-out infinite;}
+  #endFab.hintbtn{animation:pulseb 1.2s ease-in-out infinite;}
+  #status{position:absolute;left:58px;bottom:10px;max-width:52%;font-size:13px;color:#4c3626;font-weight:600;
+    background:rgba(255,253,244,.92);border:1px solid #e6d7b0;border-radius:10px;padding:5px 10px;z-index:4;
+    box-shadow:var(--shadow);}
+  #status.flash{animation:sflash .5s ease;}
+  @keyframes sflash{0%{background:#ffe9a8;}100%{background:rgba(255,253,244,.92);}}
+  #camhint{position:absolute;right:100px;bottom:10px;font-size:10.5px;color:rgba(67,40,24,.7);
+    background:rgba(255,253,244,.65);border-radius:8px;padding:2px 8px;pointer-events:none;z-index:3;}
+  #legend{position:absolute;left:50%;transform:translateX(-50%);bottom:100px;z-index:4;font-size:11.5px;
+    background:rgba(255,253,244,.92);border:1px solid #bcd3e2;border-radius:10px;padding:4px 12px;
+    box-shadow:var(--shadow);white-space:nowrap;}
+  #nextlvl{position:absolute;left:50%;transform:translateX(-50%);bottom:110px;z-index:6;
+    background:#d9a520;border:2px solid #c8951a;color:#fff;font-size:15px;padding:11px 22px;text-align:center;
+    border-radius:14px;box-shadow:0 4px 20px rgba(160,110,10,.5);animation:pulseb 1.1s ease-in-out infinite;cursor:pointer;font-weight:800;}
+  #goals .star{display:inline-block;margin-left:5px;}
+  #goals .star.pop{animation:starpop .7s cubic-bezier(.2,1.6,.4,1) both;}
+  @keyframes starpop{0%{transform:scale(0) rotate(-120deg);opacity:0;}60%{transform:scale(1.6) rotate(12deg);opacity:1;}100%{transform:scale(1) rotate(0);}}
+  #side{display:none;}
+  #side.open{position:fixed;top:8px;left:8px;bottom:8px;width:min(370px,calc(100% - 16px));z-index:9;
+    background:rgba(254,250,224,.98);display:flex;flex-direction:column;gap:8px;overflow-y:auto;
+    border-radius:14px;padding:10px;box-shadow:0 10px 40px rgba(0,0,0,.4);}
+  #sideClose{background:var(--terra);color:#fff;border-color:var(--terra);text-align:center;font-size:14px;padding:8px;}
+  .panel{background:var(--card);border:1px solid #e6d7b0;border-radius:12px;padding:9px 12px;box-shadow:var(--shadow);flex:0 0 auto;}
+  .panel h3{margin:0 0 6px;font-size:12px;text-transform:uppercase;letter-spacing:.9px;color:var(--dusk);}
+  #weatherbox{position:absolute;top:36px;left:6px;z-index:8;font-size:13px;line-height:1.5;max-width:265px;}
+  #goalsBox{position:absolute;top:36px;left:6px;z-index:4;width:198px;background:rgba(255,251,235,.82);
+    border:1px solid #e6d7b0;border-radius:10px;padding:3px 8px 4px;box-shadow:var(--shadow);}
+  #goalsBox h3{margin:0;font-size:9px;text-transform:uppercase;letter-spacing:.6px;color:var(--dusk);
+    cursor:pointer;line-height:1.5;}
+  #goalsBox h3::after{content:" ▾";color:#b09468;}
+  #goalsBox.min h3::after{content:" ▸";}
+  #goalsBox.min #goals,#goalsBox.min .fplink{display:none;}
+  #goals .starstrip{font-size:10px;color:#a8811f;border-top:1px dashed #e0d3ae;margin-top:4px;padding-top:3px;letter-spacing:.3px;}
+  #goalsBox .fplink{font-size:10.5px;color:#8a6b52;text-decoration:underline;cursor:pointer;margin-top:2px;}
+  .fxpop{position:absolute;z-index:7;transform:translate(-50%,-50%);pointer-events:none;
+    font-size:13px;font-weight:800;color:#1d6fa8;background:rgba(255,253,244,.92);border:1.5px solid #7db3d8;
+    border-radius:11px;padding:2px 8px;box-shadow:var(--shadow);white-space:nowrap;
+    animation:fxrise 2.6s ease-out both;}
+  .fxpop.good{color:#3f6b1f;border-color:#8fae86;}
+  .htag{position:absolute;z-index:6;transform:translate(-50%,-50%);cursor:pointer;
+    font-size:15px;background:rgba(255,250,230,.96);border:2px solid #d9a520;border-radius:50%;
+    width:34px;height:34px;display:flex;align-items:center;justify-content:center;
+    box-shadow:0 2px 8px rgba(160,110,10,.4);animation:htbob 1.4s ease-in-out infinite;}
+  .htag:hover{background:#ffedb8;}
+  .htag.wtag{width:27px;height:27px;font-size:12px;border-color:#7db3d8;box-shadow:0 2px 7px rgba(40,90,140,.35);animation-duration:1.9s;}
+  .htag.wtag:hover{background:#e2f1fb;}
+  @keyframes htbob{0%,100%{margin-top:0;}50%{margin-top:-7px;}}
+  .fxpop.earth{color:#7a4f22;border-color:#c9a86b;}
+  @keyframes fxrise{0%{opacity:0;transform:translate(-50%,-30%);}10%{opacity:1;transform:translate(-50%,-55%);}
+    75%{opacity:1;transform:translate(-50%,-115%);}100%{opacity:0;transform:translate(-50%,-150%);}}
+  #goals div{font-size:11px;padding:1px 0;line-height:1.3;}
+  #goals .done{color:var(--green);}
+  #goals .done.fresh{animation:objdone .8s ease;}
+  @keyframes objdone{0%{background:#dff0d0;transform:translateX(3px);}100%{background:transparent;}}
+  #goals .done::before{content:"✔ ";}
+  #goals .todo{color:#9b8264;}
+  #goals .todo::before{content:"○ ";}
+  #logpanel{flex:1 1 auto;display:flex;flex-direction:column;min-height:80px;}
+  #log{font-size:12.5px;line-height:1.45;overflow-y:auto;flex:1;min-height:0;}
+  #log p{margin:0 0 5px;}
+  #log p:first-child{font-weight:600;}
+  .ovl{position:fixed;inset:0;background:rgba(67,40,24,.45);display:flex;align-items:center;justify-content:center;z-index:10;}
+  .ovl .box{background:var(--card);border-radius:18px;max-width:540px;margin:16px;padding:22px 26px;box-shadow:0 10px 40px rgba(0,0,0,.3);
+    font-size:14px;line-height:1.55;max-height:88vh;overflow-y:auto;}
+  .ovl h2{margin:0 0 10px;font-size:20px;}
+  .ovl button{margin-top:12px;font-size:14px;padding:9px 20px;background:var(--terra);color:#fff;border-color:var(--terra);text-align:center;}
+  .hidden{display:none !important;}
+  #savetext{width:100%;height:120px;font-size:10px;font-family:monospace;user-select:text;-webkit-user-select:text;
+    border:1.5px solid #dcc891;border-radius:9px;padding:6px;background:#fffdf4;color:var(--ink);resize:vertical;}
+  @media (max-width:920px){
+    #hud{right:136px;gap:4px;}
+    .pill,#chips .chip{font-size:10.5px;padding:2px 7px;}
+    #chips{flex-wrap:nowrap;overflow-x:auto;max-width:100%;-webkit-overflow-scrolling:touch;}
+    #tut{top:60px;right:136px;font-size:10.5px;padding:4px 7px;}
+    #tut .step{font-size:10px;}
+    #dock{width:132px;}
+    #dock.collapsed{transform:translateX(110px);}
+    #goalsBox{width:158px;top:56px;padding:3px 8px 4px;}
+    #goalsBox h3{font-size:9px;}
+    #goals div{font-size:9.5px;padding:1px 0;}
+    #goalsBox .fplink{font-size:9px;}
+    #weatherbox{top:56px;font-size:11.5px;max-width:225px;}
+    .toolgroup .cap{font-size:8.5px;}
+    .btns button .cost{font-size:8.5px;}
+    .btns button b{font-size:10px;}
+    .btns button .cost{font-size:8.5px;}
+    #endFab{width:56px;height:56px;font-size:16px;}
+    #endFab small{font-size:8.5px;}
+    #leftRail{bottom:90px;}
+    #leftRail button{width:36px;height:36px;font-size:15px;}
+    #camhint{display:none;}
+    #status{font-size:11px;max-width:56%;left:52px;}
+    #nextlvl{font-size:12.5px;padding:9px 14px;bottom:96px;}
+    #legend{font-size:9.5px;white-space:normal;text-align:center;bottom:88px;}
+    .ovl .box{padding:16px 18px;font-size:13px;}
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="view">
+    <div id="tut" class="hidden"></div>
+    <div id="timebar"></div>
+    <div id="flash"></div>
+    <div id="duskfade"></div>
+    <div id="stormToast" class="hidden"></div>
+    <div id="bigClock">
+      <button id="rtBtn" title="Timed mode: the day ends on a countdown, tower-defense style. Off by default — click to try it.">⏱</button>
+      <div id="bcTime">⏳ 40</div>
+      <div id="bcSep"></div>
+      <div id="bcEnergy"><span id="bcEnum">⚡ 10</span><span id="bcPips"></span></div>
+      <div id="bcSep2"></div>
+      <div id="chips"></div>
+    </div>
+    <div id="status">Pick a tool from the dock on the right, then tap the land. Drag to orbit.</div>
+    <div id="camhint">drag orbit · shift-drag paints · rt-click: harvest / berm-a-swale · space ends day</div>
+    <div id="legend" class="hidden">💧 Water view — <b style="color:#2e6f9e">blue = wet</b> · <b style="color:#c14a2a">red = thirsty plant</b> · arrows = flow (V toggles)</div>
+    <button id="nextlvl" class="hidden">⭐ LEVEL COMPLETE — Next level!</button>
+    <div id="goalsBox"><h3 id="goalstitle">Homestead goals</h3><div id="goals"></div></div>
+    <div class="panel hidden" id="weatherbox"></div>
+  </div>
+  <div id="hud">
+    <span class="pill brand">🌵 <span id="verlabel">v3.1</span></span>
+    <span class="pill" id="daybox"></span>
+    <span class="pill" id="wpill"></span>
+    <span class="pill" id="timerpill" title="The day ends when the sun does — spend your energy fast!">⏳</span>
+  </div>
+  <div id="leftRail">
+    <button id="infoBtn" title="Journal">📖</button>
+    <button id="wvBtn" title="Water view (V)">💧</button>
+    <button id="rsBtn" title="Retry level">↻</button>
+    <button id="sndBtn" title="Sound on/off">🔊</button>
+    <button id="saveBtn" title="Save / load game">💾</button>
+    <button id="skiptest" class="hidden" title="Test mode: skip to the next level">⏭</button>
+  </div>
+  <div id="dock">
+    <button id="dockTab" title="Hide tools">⏵</button>
+    <div id="dockInner">
+      <div id="workbar"></div>
+      <div id="toolbar"></div>
+    </div>
+  </div>
+  <button id="endFab">🌙<small>End day</small></button>
+  <div id="side">
+    <button id="sideClose" onclick="document.getElementById('side').classList.remove('open')">✕ Close</button>
+    <div class="panel" id="logpanel"><h3>Journal</h3><div id="log"></div></div>
+  </div>
+</div>
+
+<div class="ovl" id="intro">
+  <div class="box">
+    <div style="text-align:center;margin-bottom:10px;">
+      <div style="font-size:34px;line-height:1;">🌵🏜️🌧️</div>
+      <h2 style="margin:6px 0 2px;font-size:26px;letter-spacing:.5px;background:linear-gradient(90deg,#bc6c25,#d9a520,#606c38);-webkit-background-clip:text;background-clip:text;color:transparent;">DESERT HOMESTEAD</h2>
+      <div style="font-size:12px;color:#8a6b52;font-weight:700;letter-spacing:2px;text-transform:uppercase;">catch the rain · hold the soil · build your home</div>
+    </div>
+    <p>The desert doesn´t lack water — it loses it. Every storm races off the bare land in an hour.
+    Your job: <b>slow it, spread it, sink it.</b></p>
+    <p style="line-height:1.7;">⛏ <b>Swales</b> catch the sheet-flow running downhill.&nbsp;
+    🪵 <b>Beaver-dam analogs</b> pond the wash and green its banks.&nbsp;
+    🪨 <b>Rock dams</b> silt the little creeks into farmland.&nbsp;
+    🌱 <b>Crops drink</b> — 2 moisture a day — so put water where the roots are.&nbsp;
+    🧱 <b>Earthbags</b> raise your home from the dirt your swales pay you.</p>
+    <p><b>Field school first</b> — eight tiny one-click lessons, one per tool. <b>Then ten levels</b> climbing from saguaro country to the pinyon-juniper rim. Deterministic storms — the forecast is a promise. Finish at par pace for ⭐⭐⭐, and mind the rattlers. 🐍</p>
+    <p style="font-size:12.5px;color:#8a6b52;"><b>Drag</b> orbits · <b>scroll</b> zooms · <b>click</b> works the land · <b>shift-drag</b> paints · <b>space</b> ends the day · ⏱ turns on the countdown clock if you want the pressure.</p>
+    <button onclick="startMode('campaign')">Play the campaign</button>
+    <button onclick="startMode('free')" style="background:#fffdf4;color:var(--ink);border-color:#dcc891;">Free play — everything unlocked</button>
+    <p id="nojs" style="margin:14px 0 0;font-size:12px;background:#fff2df;border:1px solid #e8bd63;border-radius:9px;padding:8px 10px;">
+      ⚠️ <b>Buttons not responding?</b> You're in a file <i>preview</i> (Gmail and iPhone Files previews turn scripts off, so the game can't start).<br>
+      <b>Android:</b> download the attachment, then open it from the <b>Files/Downloads app → open with Chrome</b>.<br>
+      <b>iPhone:</b> previews can't run apps — the game needs to be hosted at a web link instead. Ask Claude to set that up.</p>
+  </div>
+</div>
+
+<div class="ovl hidden" id="lost">
+  <div class="box" style="border:3px solid #c14a2a;">
+    <h2>💔 The land beat you this time</h2>
+    <p id="lostbody"></p>
+    <button onclick="lostRetry()" style="background:#c14a2a;border-color:#c14a2a;">↻ Try this level again</button>
+  </div>
+</div>
+<div class="ovl hidden" id="saveovl">
+  <div class="box">
+    <h2>💾 Save / Load</h2>
+    <p style="font-size:13px;">Your save is a code. <b>Copy</b> it somewhere safe (notes app, text file). To restore, paste a code below and press <b>Load</b>.</p>
+    <textarea id="savetext" spellcheck="false"></textarea>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button onclick="doCopySave()">📋 Copy code</button>
+      <button onclick="doLoadSave()">📥 Load pasted code</button>
+      <button onclick="document.getElementById('saveovl').classList.add('hidden')" style="background:#fffdf4;color:var(--ink);border-color:#dcc891;">Close</button>
+    </div>
+  </div>
+</div>
+<div class="ovl hidden" id="chap">
+  <div class="box">
+    <h2 id="chaptitle"></h2>
+    <p id="chapbody"></p>
+    <button onclick="document.getElementById('chap').classList.add('hidden')">Onward</button>
+  </div>
+</div>
+
+<div class="ovl hidden" id="report">
+  <div class="box">
+    <h2>🌧️ Storm report</h2>
+    <p id="repbody"></p>
+    <button onclick="closeReport()">Back to work</button>
+  </div>
+</div>
+
+<div class="ovl hidden" id="win">
+  <div class="box">
+    <h2>🏠 Home at last!</h2>
+    <p id="wintext"></p>
+    <p>The prototype loop ends here — but the desert keeps going. Keep planting, or start a fresh plot.</p>
+    <button onclick="document.getElementById('win').classList.add('hidden')">Keep playing</button>
+    <button onclick="location.reload()">New homestead</button>
+  </div>
+</div>
+<script src="three.v128.min.js"></script>
+<script src="game.js"></script>
+</body>
+</html>
