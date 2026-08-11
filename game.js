@@ -432,7 +432,7 @@ function buildToolbar(){
     }
     const note=document.createElement('div');
     note.className='docknote';
-    note.innerHTML='🪓 stone &amp; wood: tap 🪨 boulders and 🪵 trees on the map — free, but they don´t grow back';
+    note.innerHTML='🪓 stone &amp; wood: tap a 🪨 boulder or 🪵 tree once to see its haul, tap again to collect — free, but they don´t grow back';
     workbar.appendChild(note);
     toolbarTail(null);
     return;
@@ -982,7 +982,7 @@ function startMode(mode,lv){
     dfdStart(lv);
     fitCam();cam.theta=0.18;cam.phi=1.1;updateCamera();
     const howto=lv===0?
-      '<br><br><b>How it works:</b> 🌵 <b>Prickly pear is your starter</b> — plant it anywhere, it never thirsts, but it hits soft. ⛏ <b>Berm & swale</b> slurps water monsters into 💧 (money!) and digs its own beds beside it — that´s where the real towers grow. DRY waves send heat imps to burn your banked water. Pick cards from the <b>dock on the right</b>, tap the map to place, and <b>tap the monsters</b> to smack them yourself. 🪓 Stone and wood come from <b>tapping boulders and trees</b> on the map — free, finite, and storms wash fresh driftwood into the channels.':'';
+      '<br><br><b>How it works:</b> 🌵 <b>Prickly pear is your starter</b> — plant it anywhere, it never thirsts, but it hits soft. ⛏ <b>Berm & swale</b> slurps water monsters into 💧 (money!) and digs its own beds beside it — that´s where the real towers grow. DRY waves send heat imps to burn your banked water. Pick cards from the <b>dock on the right</b>, tap the map to place, and <b>tap the monsters</b> to smack them yourself. 🪓 Stone and wood come from boulders and trees: <b>tap once to see the haul, tap again to collect</b> — free, finite, and storms wash fresh driftwood into the channels.':'';
     showChap('🌵 Level '+(lv+1)+' — '+L.name, L.intro+howto);
     log(L.name+': wave 1 of '+dfdWaves().length+' builds on the horizon. The dock is on the right.');
   }
@@ -1491,7 +1491,11 @@ function smartClick(x,y,cx,cy){
       else {say('Water stock is dry — catch the next wet wave or wait on the herd.');flashChip('water');}
       return;
     }
-    if(t.type==='rock'||t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco))){doTool('gather',x,y);return;}
+    if(t.type==='rock'||t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco))){
+      if(gatherArm&&gatherArm.x===x&&gatherArm.y===y){clearGatherArm();doTool('gather',x,y);} // second tap: collect
+      else armGather(x,y,t); // first tap: show what's on offer
+      return;
+    }
     say(describe(t,x,y));
     return;
   }
@@ -2801,6 +2805,24 @@ function buildTile(x,y){
 }
 
 const harvestTags=[];
+let gatherArm=null; // first tap shows the badge; a second tap before it fades collects
+function clearGatherArm(){
+  if(gatherArm){clearTimeout(gatherArm.t1);clearTimeout(gatherArm.t2);gatherArm.el.remove();gatherArm=null;}
+}
+function armGather(x,y,t){
+  clearGatherArm();
+  const isRock=t.type==='rock';
+  const el=document.createElement('div');
+  el.className='htag gtag armed';
+  el.innerHTML=(isRock?'🪨':'🪵')+'<small>+2</small>';
+  el.title='Tap again to collect';
+  el.addEventListener('click',e=>{e.stopPropagation();clearGatherArm();doTool('gather',x,y);});
+  view.appendChild(el);
+  gatherArm={x,y,el,
+    t1:setTimeout(()=>{el.classList.add('fading');},2000),
+    t2:setTimeout(()=>{clearGatherArm();},2650)};
+  SFX.tick();
+}
 function buildTags(){
   for(const tg of harvestTags)tg.el.remove();
   harvestTags.length=0;
@@ -2811,16 +2833,6 @@ function buildTags(){
       el.className='htag';el.textContent='🧺';
       el.title='Harvest '+CROPS[t.plant.crop].name;
       el.addEventListener('click',e=>{e.stopPropagation();if(doHarvest(t))refresh();});
-      view.appendChild(el);
-      harvestTags.push({x,y,el});
-    }
-    else if(t&&S.mode==='defend'&&S.dfd&&S.dfd.phase!=='wave'&&!S.dfd.won&&!S.dfd.lost&&
-      (t.type==='rock'||t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco)))){
-      const el=document.createElement('div');
-      const isRock=t.type==='rock';
-      el.className='htag gtag';el.textContent=isRock?'🪨':'🪵';
-      el.title=isRock?'Tap: break for 2 stone (then it´s gone)':'Tap: cut for 2 wood (driftwood too — storms drop more)';
-      el.addEventListener('click',e=>{e.stopPropagation();doTool('gather',x,y);});
       view.appendChild(el);
       harvestTags.push({x,y,el});
     }
@@ -4171,7 +4183,7 @@ function animate(){
     hawk.rotation.z=0.25+0.1*Math.sin(tick*0.05);
     hawk.visible=S.weather!=='rain';
   }
-  for(const tg of harvestTags){
+  for(const tg of harvestTags.concat(gatherArm?[gatherArm]:[])){
     const t2=S.grid[tg.y]&&S.grid[tg.y][tg.x];
     if(!t2){tg.el.style.display='none';continue;}
     const v=new THREE.Vector3(gx(tg.x),t2.elev+0.8,gz(tg.y)).project(camera);
