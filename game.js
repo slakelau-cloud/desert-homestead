@@ -322,13 +322,24 @@ function generateTerrain(p){
     // a little variation so banks are not identical everywhere, but always monotonic:
     // a tile closer to the water is never left higher than one further out
     const w=Math.min(0.85,BANK_PULL[dist-1]*(0.85+Math.random()*0.3));
-    graded.push({t,dir,dist,w,bedElev});
+    graded.push({t,x,y,dir,dist,w,bedElev});
   }
   for(const g2 of graded){
     g2.t.elev=g2.t.elev*(1-g2.w)+g2.bedElev*g2.w;
     g2.t.tilt=g2.dir;                 // which way its water runs
     g2.t.tiltMag=g2.w;                // how hard the grade pulls it
     g2.t.bank=g2.dist;                // how far out on the bank it sits
+  }
+  // a bank must never rise as it nears the water — the random variation can occasionally
+  // leave an inner tile standing proud, so pull any of those down until the run is monotonic
+  for(let pass=0;pass<4;pass++){
+    let fixed=0;
+    for(const g2 of graded){
+      const row=S.grid[g2.y]; if(!row)continue;
+      const inner=row[g2.x+g2.dir];
+      if(inner&&inner.type!=='wash'&&inner.type!=='creek'&&inner.elev>g2.t.elev){inner.elev=g2.t.elev;fixed++;}
+    }
+    if(!fixed)break;
   }
   // guarantee gatherable stone and wood on every map
   const treePick=p.flora.filter(f=>TREE_SPECIES.includes(f));
@@ -2277,6 +2288,35 @@ function addDrift(g,r,y0){
     s2.rotation.z=-0.7;s2.rotation.y=r+2.2;s2.castShadow=true;g.add(s2);
   }
 }
+/* A bank tile is a normal block with ONE EDGE OF ITS TOP FACE cut down, so the
+   walls stay dead vertical (90° like every other tile) and only the top is a
+   ramp running into the channel. High edge meets the uphill neighbour's top,
+   low edge meets the next tile's top — so the bank is one continuous slope,
+   not a row of crooked teeth. */
+const _slicedCache=new Map();
+const SLICE_MIN=0.04; // below this the ramp is invisible — keep the plain block
+function slicedBase(dir,drop){
+  if(!(drop>=SLICE_MIN))return G.base;
+  const q=Math.max(0,Math.min(0.9,Math.round(drop*40)/40)); // quantised so we cache a handful
+  const key=dir+':'+q;
+  let g2=_slicedCache.get(key);
+  if(g2)return g2;
+  g2=G.base.clone();
+  const pos=g2.attributes.position, top=2.5;
+  for(let i=0;i<pos.count;i++){
+    if(pos.getY(i)>top-0.01&&pos.getX(i)*dir>0)pos.setY(i,top-q);
+  }
+  pos.needsUpdate=true;
+  g2.computeVertexNormals();
+  _slicedCache.set(key,g2);
+  return g2;
+}
+function bankDrop(t,x,y){ // how far this tile's top falls on its way to the water
+  if(!t.tilt)return 0;
+  const n=tileAt(x+t.tilt,y);
+  if(!n)return 0;
+  return Math.max(0,Math.min(0.9,t.elev-n.elev));
+}
 function buildTile(x,y){
   const t=S.grid[y][x];
   const g=new THREE.Group();
@@ -2380,9 +2420,12 @@ function buildTile(x,y){
     if(t.deco==='drift')addDrift(g,t.rot,0.18);
   } else {
     const baseMat=t.type==='bed'?M.sand[1]:(t.type==='grass'?M.grass:(t.type==='hardpan'?M.hardpan:(t.type==='eroded'?M.eroded:M.sand[t.shade])));
-    const base=mesh(G.base,baseMat,0,-2.2,0,{recv:true});
+    const drop=bankDrop(t,x,y);
+    const base=mesh(slicedBase(t.tilt||1,drop),baseMat,0,-2.2,0,{recv:true});
     base.castShadow=false;
     g.add(base);
+    // everything standing on a sloped top sits at the middle of the ramp
+    if(drop>=SLICE_MIN){g.userData.slopeSink=drop*0.5;g.userData.sinkFrom=g.children.length;}
     if(S.weather==='rain'&&['sand','grass','bed','ord','rock','hardpan','eroded'].includes(t.type)){
       const deep=t.type==='bed'||t.type==='ord';
       const f=new THREE.Mesh(G.otile,deep?M.floodMid:M.floodLite);
@@ -2907,6 +2950,9 @@ function buildTile(x,y){
   // Tiles stay FLAT and level — the slope into a channel is carried by elevation,
   // as a run of level steps grading down to the creek bed (see the bank pass in
   // generateTerrain). Nothing tips; the ground just gets lower as it nears the water.
+  if(g.userData.slopeSink){ // drop everything standing on the ramp to the ramp's mid-height
+    for(let i=g.userData.sinkFrom;i<g.children.length;i++)g.children[i].position.y-=g.userData.slopeSink;
+  }
   if(S.overlay){
     // SIDE SLOPE arrows: which way this ground sends its water
     if(t.tilt){
@@ -3295,7 +3341,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v6.3 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v6.4 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
