@@ -298,25 +298,37 @@ function generateTerrain(p){
     bankSpots.splice(i,1)[0].deco='cottonwood';
   }
   }
-  // SIDE SLOPE: the ground next to a channel leans toward it, so runoff gets pulled in
-  // and concentrates. That is why washes get bigger and faster the further down you go.
+  // THE BANKS GRADE DOWN TO THE WATER. Every tile stays flat and level with its
+  // neighbours — what changes is its height. Ground near a channel is pulled toward
+  // that channel's own elevation, so the bank reads as a run of level steps easing
+  // down into the creek bed instead of a wall beside it. Runoff crossing that grade
+  // gets drawn sideways into the channel, which is where it joins up and gets big.
+  // Only the WASH — the deep channel — cuts a valley like this. The little creeks
+  // stay shallow and flush with the ground around them, the way they really are.
+  for(const p2 of washPath){const q=S.grid[p2.y][p2.x];q.elev-=0.22;} // the bed sits properly low
+  const BANK_PULL=[0.70,0.42,0.18]; // how far a tile 1/2/3 out drops toward the bed
+  const graded=[];
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     const t=S.grid[y][x];
     if(t.type==='wash'||t.type==='creek')continue;
-    let dir=0, dist=99;
+    let dir=0, dist=99, bedElev=null;
     for(let d=1;d<=3;d++){
-      const L=S.grid[y][x-d], R=S.grid[y][x+d];
-      const isCh=q=>q&&(q.type==='wash'||q.type==='creek');
-      if(isCh(L)&&d<dist){dir=-1;dist=d;}
-      if(isCh(R)&&d<dist){dir=1;dist=d;}
+      for(const sgn of [-1,1]){
+        const q=S.grid[y][x+sgn*d];
+        if(q&&q.type==='wash'&&d<dist){dist=d;dir=sgn;bedElev=q.elev;}
+      }
     }
-    if(!dir)continue;
-    // not every tile leans — it is patchy ground, which is what makes reading it interesting
-    if(Math.random()<(dist===1?0.75:dist===2?0.45:0.2)){
-      t.tilt=dir;
-      t.tiltMag=(dist===1?0.9:dist===2?0.6:0.35)*(0.6+Math.random()*0.6);
-      t.elev+=t.tiltMag*0.012*dist; // and it actually sits a touch higher than the channel
-    }
+    if(!dir||bedElev===null)continue;
+    // a little variation so banks are not identical everywhere, but always monotonic:
+    // a tile closer to the water is never left higher than one further out
+    const w=Math.min(0.85,BANK_PULL[dist-1]*(0.85+Math.random()*0.3));
+    graded.push({t,dir,dist,w,bedElev});
+  }
+  for(const g2 of graded){
+    g2.t.elev=g2.t.elev*(1-g2.w)+g2.bedElev*g2.w;
+    g2.t.tilt=g2.dir;                 // which way its water runs
+    g2.t.tiltMag=g2.w;                // how hard the grade pulls it
+    g2.t.bank=g2.dist;                // how far out on the bank it sits
   }
   // guarantee gatherable stone and wood on every map
   const treePick=p.flora.filter(f=>TREE_SPECIES.includes(f));
@@ -1569,7 +1581,7 @@ function describe(t,x,y){
       :sh.kind==='swale'?'A swale beside it is holding water — it will not wilt this turn.'
       :'The cistern is keeping it.');
   }
-  if(t.tilt)bits.push(`↔️ This ground <b>leans ${t.tilt>0?'right':'left'}</b>, toward the channel — runoff crossing it gets pulled sideways into the wash, where it joins up and gets bigger and faster. A swale or berm here cuts that pull to a quarter.`);
+  if(t.tilt)bits.push(`↔️ <b>Bank ground</b> — level, but graded down toward the channel ${t.tilt>0?'to the right':'to the left'} (${t.bank||1} ${(t.bank||1)===1?'tile':'tiles'} out). Runoff crossing it gets drawn sideways into the wash, where it joins up and gets bigger and faster. A swale or berm here cuts that pull to a quarter.`);
   if(t.weed)bits.push('🌾 An invasive the tumbleweeds seeded. Nothing builds here until you pull it (🧹).');
   if(t.mulch)bits.push('🍂 Mulched — half the drying, and dust devils skid off it.');
   if(t.terrace)bits.push('🏞 A terrace: silt caught behind the dam until it made level ground.');
@@ -2892,13 +2904,9 @@ function buildTile(x,y){
     sm.position.y=(t.type==='wash'||t.type==='creek'||t.type==='swale')?0.23:0.4;
     g.add(sm);
   }
-  if(t.tilt&&t.type!=='wash'&&t.type!=='creek'){
-    // the ground visibly LEANS toward the channel — you should be able to read a side
-    // slope at a glance, the way you can standing on real ground next to a wash
-    g.rotation.z=-t.tilt*t.tiltMag*0.62;   // up to ~35°: unmistakable at a glance
-    g.position.x+=t.tilt*t.tiltMag*0.07;   // and it slumps that way
-    g.position.y-=t.tiltMag*0.07;
-  }
+  // Tiles stay FLAT and level — the slope into a channel is carried by elevation,
+  // as a run of level steps grading down to the creek bed (see the bank pass in
+  // generateTerrain). Nothing tips; the ground just gets lower as it nears the water.
   if(S.overlay){
     // SIDE SLOPE arrows: which way this ground sends its water
     if(t.tilt){
@@ -3287,7 +3295,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v6.2 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v6.3 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -4110,7 +4118,7 @@ function dfdStartWave(){
     :'A DRY wave — heat and hunger. Guard your water and your flock. ☀️'));
   if(D.wave===0&&!D.taughtTilt&&countAll(t=>!!t.tilt)>4){
     D.taughtTilt=1;
-    log('↔️ Notice the ground beside the channels leans toward them. Water crossing it gets pulled in — and once it is IN the wash it joins up, speeds up, and arrives as one big surge. Swales and berms on the lean are what break that up.');
+    log('↔️ Notice how the ground STEPS DOWN as it nears the channels — level all the way, just lower and lower until it meets the bed. Water crossing that grade gets drawn in, and once it is IN the wash it joins up, speeds up, and arrives as one big surge. Swales and berms out on the bank are what break that up.');
   }
   if(W.grader)say('🚜 The neighbour hired a grading crew. It is cutting a new channel across the top of your land. Stop it or live with the water it sends you.');
   refresh();
