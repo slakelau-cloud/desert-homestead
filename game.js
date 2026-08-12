@@ -298,6 +298,26 @@ function generateTerrain(p){
     bankSpots.splice(i,1)[0].deco='cottonwood';
   }
   }
+  // SIDE SLOPE: the ground next to a channel leans toward it, so runoff gets pulled in
+  // and concentrates. That is why washes get bigger and faster the further down you go.
+  for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
+    const t=S.grid[y][x];
+    if(t.type==='wash'||t.type==='creek')continue;
+    let dir=0, dist=99;
+    for(let d=1;d<=3;d++){
+      const L=S.grid[y][x-d], R=S.grid[y][x+d];
+      const isCh=q=>q&&(q.type==='wash'||q.type==='creek');
+      if(isCh(L)&&d<dist){dir=-1;dist=d;}
+      if(isCh(R)&&d<dist){dir=1;dist=d;}
+    }
+    if(!dir)continue;
+    // not every tile leans — it is patchy ground, which is what makes reading it interesting
+    if(Math.random()<(dist===1?0.75:dist===2?0.45:0.2)){
+      t.tilt=dir;
+      t.tiltMag=(dist===1?0.9:dist===2?0.6:0.35)*(0.6+Math.random()*0.6);
+      t.elev+=t.tiltMag*0.012*dist; // and it actually sits a touch higher than the channel
+    }
+  }
   // guarantee gatherable stone and wood on every map
   const treePick=p.flora.filter(f=>TREE_SPECIES.includes(f));
   let trees=0,rocksN=0;
@@ -431,7 +451,8 @@ function buildToolbar(){
       if(!S.unlocked.includes(c.id))continue;
       const b=document.createElement('button');
       b.className='tcard'+(S.dfd.sel===c.id?' armed':'')+(dfdAfford(c)?'':' broke');
-      b.innerHTML=`<span class="tic">${c.ic}</span><b>${c.name}</b><span class="tcost">${dfdCostStr(c)||'free'}</span>`;
+      b.innerHTML=`<span class="trow"><span class="tic">${c.ic}</span><b>${c.name}</b></span>`
+        +`<span class="tcost">${dfdCostChips(c)}</span>`;
       b.title=c.gain;
       b.onclick=()=>dfdSelect(c.id);
       workbar.appendChild(b);
@@ -444,7 +465,7 @@ function buildToolbar(){
     }
     const note=document.createElement('div');
     note.className='docknote';
-    note.innerHTML='🪓 stone &amp; wood: tap a 🪨 boulder or 🪵 tree once to see its haul, tap again to collect — free, but they don´t grow back';
+    note.innerHTML='🪓 <b>Stone &amp; wood:</b> tap a 🪨 boulder or 🪵 tree once to see its haul, tap again to collect. Or arm 🧹 <b>Clear</b> and tap it — same haul, and it frees the tile. Free, but they don´t grow back.';
     workbar.appendChild(note);
     toolbarTail(null);
     return;
@@ -1291,21 +1312,22 @@ function clickTile(x,y){
     buildBerm(x,y);
   }
   else if(tool==='gather'){
+    const freeGather=(S.mode==='defend'); // no energy economy in the live-wave game — hauling is free
     if(t.type==='rock'){
-      if(!spend(1))return;
+      if(!freeGather&&!spend(1))return;
       S.stone+=2;S.lv.stone+=2;
       t.type='sand';t.deco=null;
       popAt(x,y,'+2 🪨',0,'earth');flyRes(x,y,'stone','🪨',2);SFX.gather();
       say(`Broke the boulder into 2 stone (now ${S.stone}). That one's spent. 🪨`);
     }
     else if(t.deco==='drift'){
-      if(!spend(1))return;
+      if(!freeGather&&!spend(1))return;
       S.wood+=2;S.lv.wood+=2;t.deco=null;
       popAt(x,y,'+2 🪵',0,'earth');flyRes(x,y,'wood','🪵',2);SFX.gather();
       say(`Easy pickings — 2 driftwood hauled off (wood: ${S.wood}). 🪵`);
     }
     else if(t.deco&&TREE_SPECIES.includes(t.deco)){
-      if(!spend(2)){say('Felling a tree takes 2⚡ — too tired. (Driftwood only takes 1.)');return;}
+      if(!freeGather&&!spend(2)){say('Felling a tree takes 2⚡ — too tired. (Driftwood only takes 1.)');return;}
       S.wood+=2;S.lv.wood+=2;
       t.deco=null;
       popAt(x,y,'+2 🪵',0,'earth');flyRes(x,y,'wood','🪵',2);SFX.gather();
@@ -1546,6 +1568,7 @@ function describe(t,x,y){
       :sh.kind==='swale'?'A swale beside it is holding water — it will not wilt this turn.'
       :'The cistern is keeping it.');
   }
+  if(t.tilt)bits.push(`↔️ This ground <b>leans ${t.tilt>0?'right':'left'}</b>, toward the channel — runoff crossing it gets pulled sideways into the wash, where it joins up and gets bigger and faster. A swale or berm here cuts that pull to a quarter.`);
   if(t.weed)bits.push('🌾 An invasive the tumbleweeds seeded. Nothing builds here until you pull it (🧹).');
   if(t.mulch)bits.push('🍂 Mulched — half the drying, and dust devils skid off it.');
   if(t.terrace)bits.push('🏞 A terrace: silt caught behind the dam until it made level ground.');
@@ -2102,6 +2125,7 @@ const M={
   green:lam(0x5f8f4e),
   wilt:lam(0x8f8a5a),
   contourM:new THREE.MeshBasicMaterial({color:0x3a2a12,transparent:true,opacity:0.10}),
+  tiltM:new THREE.MeshBasicMaterial({color:0x2f8fd6,transparent:true,opacity:0.75}),
   contourOn:new THREE.MeshBasicMaterial({color:0x2fd6a8,transparent:true,opacity:0.34}),
   beanpod:lam(0x3a5a2a),
   squash:lam(0xd67f2e),
@@ -2865,7 +2889,18 @@ function buildTile(x,y){
     sm.position.y=(t.type==='wash'||t.type==='creek'||t.type==='swale')?0.23:0.4;
     g.add(sm);
   }
+  if(t.tilt&&t.type!=='wash'&&t.type!=='creek'){
+    g.rotation.z=-t.tilt*t.tiltMag*0.085; // the ground actually leans toward the channel
+  }
   if(S.overlay){
+    // SIDE SLOPE arrows: which way this ground sends its water
+    if(t.tilt){
+      const a2=new THREE.Mesh(G.arrow,M.tiltM);
+      a2.rotation.x=Math.PI/2; a2.rotation.z=t.tilt>0?-Math.PI/2:Math.PI/2;
+      a2.position.set(t.tilt*0.16,0.44,0);
+      a2.scale.setScalar(0.8+t.tiltMag*0.5);
+      g.add(a2);
+    }
     // CONTOUR BANDS: tiles at the same height get the same stripe, so building on contour is visible
     if(contourBand(t)%2===0){
       const cb=new THREE.Mesh(G.otile,M.contourM);
@@ -3216,7 +3251,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v6.0 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v6.1 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -3826,6 +3861,15 @@ function dfdPlace(id,x,y){
   const c=dfdCard(id); if(!c)return false;
   if(id==='clearT'){
     const t=tileAt(x,y); if(!t)return false;
+    if(t.type==='rock'||t.deco==='rock'){ // boulders: clear the tile AND bank the stone
+      S.stone+=2;t.type='sand';t.deco=null;SFX.gather();popAt(x,y,'+2 🪨',0,'earth');flyRes(x,y,'stone','🪨',2);
+      say('Broke the boulder out — 2 stone, and the ground is yours now. 🪨');refresh();return true;}
+    if(t.deco&&(t.deco==='drift'||t.deco==='driftwood'||TREE_SPECIES.includes(t.deco))){
+      if(t.deco==='saguaro'){say('You don´t cut a saguaro. Ever. 🌵');return false;}
+      S.wood+=2;t.deco=null;SFX.gather();popAt(x,y,'+2 🪵',0,'earth');flyRes(x,y,'wood','🪵',2);
+      say('Cleared it for 2 wood — and that tile will build now. 🪵');refresh();return true;}
+    if(t.deco==='saguaro'){say('You don´t cut a saguaro. Ever. 🌵');return false;}
+    if(t.deco){t.deco=null;SFX.gather();popAt(x,y,'🧹 cleared',0,'good');refresh();return true;}
     if(t.weed){t.weed=false;SFX.gather();popAt(x,y,'🧹 pulled the weeds',0,'good');refresh();return true;}
     if(t.type==='fence'&&t.choke){t.choke=0;SFX.gather();popAt(x,y,'🧹 cleared the fence',0,'good');refresh();return true;}
     if(['swale','berm','bed','ord','scare','fence','sling','ramada','dog','grey','paddock'].includes(t.type)){
@@ -3836,7 +3880,7 @@ function dfdPlace(id,x,y){
     }
     if(t.type==='wash'&&t.dam&&!t.beaver){t.dam=false;t.stored=0;S.dirt++;SFX.dig();refresh();return true;}
     if(t.beaver){say('The beavers are not leaving. This is their dam now. 🦫');return false;}
-    say('Clear removes your own works — swales, berms, beds, dams, crafts.');
+    say('Clear removes your own works — and boulders, trees and driftwood, which pay you 🪨/🪵 and free the tile.');
     return false;
   }
   if(id!=='upT'&&!dfdAfford(c)){say('Can´t afford it yet — '+dfdCostStr(c)+'.');flashChip(c.cost.water?'water':(c.cost.seeds?'seeds':(c.cost.stone?'stone':(c.cost.wood?'wood':'sup'))));return false;}
@@ -3908,6 +3952,17 @@ function dfdPlace(id,x,y){
   refresh();
   return true;
 }
+function dfdCostChips(c){
+  const k=c.cost||{}, p=[];
+  const add=(n,ic,key)=>{if(n)p.push(`<span class="cc${dfdShort(key)<n?' short':''}">${ic}${n}</span>`);};
+  add(k.water,'💧','water');add(k.seeds,'🌰','seeds');add(k.dirt,'🟤','dirt');
+  add(k.stone,'🪨','stone');add(k.wood,'🪵','wood');add(k.sup,'🧺','sup');
+  return p.length?p.join(''):'<span class="cc free">free</span>';
+}
+function dfdShort(key){
+  if(key==='sup')return S.dfd?S.dfd.supplies:0;
+  return S[key]||0;
+}
 function dfdCostStr(c){
   const k=c.cost, p=[];
   if(k.water)p.push(k.water+'💧');if(k.seeds)p.push(k.seeds+'🌰');if(k.dirt)p.push(k.dirt+'🟤');
@@ -3917,7 +3972,7 @@ function dfdCostStr(c){
 function dfdPlaceHint(id){
   switch(id){
     case 'pair':return 'Berm & swale needs two open sand tiles stacked — basin above, bank below, clear of the wash. It digs its own beds beside it.';
-    case 'clearT':return 'Tap one of your own works to remove it.';
+    case 'clearT':return 'Tap one of your own works to remove it — or a boulder, tree, or driftwood to clear the tile and keep the 🪨/🪵.';
     case 'ord':return 'Rock dams sit in the small creeks only.';
     case 'bda':return 'Wash dams go on open wash tiles.';
     case 'cistern':return 'The cistern goes on the FLAT, down by the house — storage lives at the base.';
@@ -4017,6 +4072,10 @@ function dfdStartWave(){
   say(W.type==='wet'?'The storm is HERE — every drop you catch is money. 🌧'
     :(W.type==='spell'?'A DRY SPELL. Nothing is coming. That is the problem — everything you own is evaporating and there is nothing to shoot. 🌡'
     :'A DRY wave — heat and hunger. Guard your water and your flock. ☀️'));
+  if(D.wave===0&&!D.taughtTilt&&countAll(t=>!!t.tilt)>4){
+    D.taughtTilt=1;
+    log('↔️ Notice the ground beside the channels leans toward them. Water crossing it gets pulled in — and once it is IN the wash it joins up, speeds up, and arrives as one big surge. Swales and berms on the lean are what break that up.');
+  }
   if(W.grader)say('🚜 The neighbour hired a grading crew. It is cutting a new channel across the top of your land. Stop it or live with the water it sends you.');
   refresh();
 }
@@ -4151,7 +4210,7 @@ function hurtCreep(c,dmg,src){
       BT.spawns.sort((a,b)=>a.at-b.at);
     }
     if(c.kind==='drop'||c.kind==='surge'){
-      let gain=src==='slurp'?(c.kind==='drop'?6:14):(c.kind==='drop'?2:4);
+      let gain=src==='slurp'?(c.kind==='drop'?6:14+4*(c.fed||0)):(c.kind==='drop'?2:4+(c.fed||0));
       if(c.silt)gain*=2; // silt-heavy runoff is worth double if you actually catch it
       const got=Math.min(gain,S.waterCap-S.water);
       if(got>0){S.water+=got;BT.banked+=got;}
@@ -4229,10 +4288,45 @@ function nitrogenAt(x,y){ // beans feed their neighbours
   return false;
 }
 function towerKey(x,y){return x+'_'+y;}
-function dfdMerge(dt){ // two drops that meet make a surge — leaking early compounds
-  if((S.dfd.wave||0)<2)return; // the opening waves stay kind
-  BT.mergeT=(BT.mergeT||0)+dt; if(BT.mergeT<0.6)return; BT.mergeT=0;
-  const drops=BT.creeps.filter(c=>!c.dead&&c.kind==='drop'&&c.lane==='col'&&!c.merged);
+function growSurge(c,by){ // a surge that swallows more water gets visibly bigger and meaner
+  c.fed=(c.fed||0)+by;
+  c.hp+=by; c.L=(c.L||CREEP_DEF.surge.L)+by*4;
+  const sc=Math.min(2.2,1+0.18*c.fed);
+  c.mesh.scale.setScalar(sc);
+  c.spd=CREEP_DEF.surge.spd*(1+0.06*c.fed);
+}
+function dfdMerge(dt){ // water JOINS. On the slope it is occasional; in the channel it is the rule.
+  BT.mergeT=(BT.mergeT||0)+dt; if(BT.mergeT<0.45)return; BT.mergeT=0;
+  const live=BT.creeps.filter(c=>!c.dead&&(c.kind==='drop'||c.kind==='surge')&&!c.merged);
+  // --- in the channel: everything that catches up to something else joins it ---
+  const inCh=live.filter(c=>c.lane==='wash');
+  for(let i=0;i<inCh.length;i++)for(let j=i+1;j<inCh.length;j++){
+    const a=inCh[i],b=inCh[j];
+    if(a.dead||b.dead||a.merged||b.merged)continue;
+    if(Math.abs(a.wi-b.wi)>1.1)continue;
+    // whichever is bigger does the swallowing — position does not decide who wins, size does
+    const big=a.kind==='surge'?a:(b.kind==='surge'?b:null);
+    if(big){
+      const small=big===a?b:a;
+      small.dead=small.merged=true;BT.killed++;
+      growSurge(big,small.kind==='surge'?2:1);
+      if(small.silt)big.silt=true;
+      big.wi=Math.max(big.wi,small.wi);
+      const p=washPath[Math.min(washPath.length-1,Math.floor(big.wi))];
+      if(p&&Math.random()<0.5)popAt(p.x,p.y,'🌊 it grew!',0,'bad');
+    } else {                                        // two drops in a channel make a surge
+      const lead=a.wi>=b.wi?a:b;
+      a.dead=b.dead=a.merged=b.merged=true;
+      const nb={kind:'surge',hp:CREEP_DEF.surge.hp,spd:CREEP_DEF.surge.spd,L:CREEP_DEF.surge.L,
+        mesh:creepMesh('surge'),dead:false,slow:0,lane:'wash',wi:lead.wi,riders:0,silt:a.silt||b.silt};
+      BT.grp.add(nb.mesh);BT.creeps.push(nb);
+      const p=washPath[Math.min(washPath.length-1,Math.floor(nb.wi))];
+      if(p)popAt(p.x,p.y,'💧+💧 = 🌊',0,'bad');
+    }
+  }
+  // --- out on the slope: only once the season has teeth ---
+  if((S.dfd.wave||0)<2)return;
+  const drops=live.filter(c=>!c.dead&&c.kind==='drop'&&c.lane==='col');
   for(let i=0;i<drops.length;i++)for(let j=i+1;j<drops.length;j++){
     const a=drops[i],b=drops[j];
     if(a.merged||b.merged)continue;
@@ -4497,9 +4591,16 @@ function dfdMoveCreeps(dt){
       const slopeMul=1+Math.min(0.8,sl*2.2)-((terr&&(terr.terrace||terr.type==='berm'))?0.35:0);
       c.yF+=c.spd*dt*(c.slow>0?0.5:1)*Math.max(0.35,slopeMul);
       if(c.slow>0)c.slow-=dt;
+      // SIDE SLOPE pulls runoff sideways into the channel — swales and berms on the
+      // lean are what stop it, because a level trench beats a tilted one every time
+      if(terr&&terr.tilt&&(c.kind==='drop'||c.kind==='surge'||c.kind==='boulder'||c.kind==='cobble')){
+        const held=(terr.type==='swale'||terr.type==='berm'||terr.type==='bed'||terr.terrace)?0.25:1;
+        const pull=terr.tiltMag*held*(c.kind==='drop'?1.5:c.kind==='surge'?1.1:0.5);
+        c.col=Math.max(0,Math.min(COLS-1,c.col+terr.tilt*pull*dt));
+      }
       const t=S.grid[Math.max(0,Math.min(ROWS-1,Math.floor(c.yF)))]?.[c.col];
       // channels swallow sheet monsters — they join the wash
-      if(t&&(t.type==='wash'||t.type==='creek')&&(c.kind==='drop')){ if(washPath.length){c.lane='wash';c.wi=washPath.findIndex(p=>p.y>=Math.floor(c.yF))||0;if(c.wi<0)c.wi=0;} }
+      if(t&&(t.type==='wash'||t.type==='creek')&&(c.kind==='drop'||c.kind==='surge')){ if(washPath.length){c.lane='wash';c.wi=washPath.findIndex(p=>p.y>=Math.floor(c.yF))||0;if(c.wi<0)c.wi=0;} }
       if(c.kind==='boulder'){ // structures stop the slide cold
         const tt=S.grid[Math.max(0,Math.min(ROWS-1,Math.floor(c.yF)))]?.[c.col];
         if(tt&&(tt.type==='berm'||tt.type==='rock'||tt.type==='ord'||tt.deco==='rock'||tt.terrace)){
@@ -4589,7 +4690,9 @@ function dfdMoveCreeps(dt){
       if(c.kind==='tumble'||c.kind==='boulder')c.mesh.rotation.x+=dt*7;
       if(c.kind==='devil')c.mesh.rotation.y+=dt*12;
     } else if(c.lane==='wash'){
-      c.wi+=c.spd*dt*(c.slow>0?0.5:1)*(1+0.05*(S.dfd.headcut||0)); // a cut channel runs faster every year
+      // in the channel, water moves: confined flow is faster the further down it gets
+      const depth=1+0.5*(c.wi/Math.max(1,washPath.length));
+      c.wi+=c.spd*dt*(c.slow>0?0.5:1)*(1+0.05*(S.dfd.headcut||0))*depth;
       if(c.wi>=washPath.length){dfdLeak(c);continue;}
       const p=washPath[Math.floor(c.wi)];
       c.mesh.position.set(gx(p.x),S.grid[p.y][p.x].elev+0.42+Math.sin(bobT)*0.05,gz(p.y));
