@@ -307,24 +307,56 @@ function generateTerrain(p){
   // gets drawn sideways into the channel, which is where it joins up and gets big.
   // Only the WASH — the deep channel — cuts a valley like this. The little creeks
   // stay shallow and flush with the ground around them, the way they really are.
-  for(const p2 of washPath){const q=S.grid[p2.y][p2.x];q.elev-=0.22;} // the bed sits properly low
-  const BANK_PULL=[0.70,0.42,0.18]; // how far a tile 1/2/3 out drops toward the bed
+  /* THE WASH DOES NOT WEAR THE SAME BANKS ALL THE WAY DOWN.
+     Each SIDE of each REACH gets its own character, and they change at the bends:
+       cliff — no grade at all. The ground stands flat right to the lip and drops off
+               sheer. Where both sides go cliff at once you get a slot canyon.
+       steep — one tile, and it falls hard: a sharp shoulder over the bed.
+       bench — a graded run of three, easing down into the channel.
+       broad — a long, lazy shoulder that reaches further out but never falls far.
+     Only graded ground leans, so only graded ground turns a swale. */
+  const BANK_STYLES=[
+    {k:'cliff',pull:null,          w:3},
+    {k:'steep',pull:[0.78],        w:3},
+    {k:'bench',pull:[0.70,0.42,0.18],w:3},
+    {k:'broad',pull:[0.52,0.38,0.26,0.14],w:2},
+  ];
+  const pickStyle=()=>{
+    const tot=BANK_STYLES.reduce((a,b2)=>a+b2.w,0); let r=Math.random()*tot;
+    for(const st of BANK_STYLES){if((r-=st.w)<=0)return st;} return BANK_STYLES[2];
+  };
+  const sideStyle=[[],[]];            // [0] = west bank, [1] = east bank, indexed by row
+  for(const side of [0,1]){
+    let y=0;
+    while(y<ROWS){
+      const st=pickStyle(), run=2+Math.floor(Math.random()*4);   // a reach lasts 2–5 rows
+      for(let k=0;k<run&&y<ROWS;k++,y++)sideStyle[side][y]=st;
+    }
+  }
+  // the bed cuts deeper where the walls stand sheer — that is what makes it read as a canyon
+  for(const p2 of washPath){
+    const q=S.grid[p2.y][p2.x];
+    const sheer=(sideStyle[0][p2.y].k==='cliff'?1:0)+(sideStyle[1][p2.y].k==='cliff'?1:0);
+    q.elev-=0.22+0.17*sheer;
+  }
   const graded=[];
   for(let y=0;y<ROWS;y++)for(let x=0;x<COLS;x++){
     const t=S.grid[y][x];
     if(t.type==='wash'||t.type==='creek')continue;
     let dir=0, dist=99, bedElev=null;
-    for(let d=1;d<=3;d++){
+    for(let d=1;d<=4;d++){
       for(const sgn of [-1,1]){
         const q=S.grid[y][x+sgn*d];
         if(q&&q.type==='wash'&&d<dist){dist=d;dir=sgn;bedElev=q.elev;}
       }
     }
     if(!dir||bedElev===null)continue;
+    const style=sideStyle[dir>0?0:1][y];      // wash to the east ⇒ this is the WEST bank
+    if(!style.pull||dist>style.pull.length)continue;   // a cliff grades nothing at all
     // a little variation so banks are not identical everywhere, but always monotonic:
     // a tile closer to the water is never left higher than one further out
-    const w=Math.min(0.85,BANK_PULL[dist-1]*(0.85+Math.random()*0.3));
-    graded.push({t,x,y,dir,dist,w,bedElev});
+    const w=Math.min(0.85,style.pull[dist-1]*(0.85+Math.random()*0.3));
+    graded.push({t,x,y,dir,dist,w,bedElev,style:style.k});
   }
   for(const g2 of graded){
     g2.t.elev=g2.t.elev*(1-g2.w)+g2.bedElev*g2.w;
@@ -415,16 +447,26 @@ const bermReserved=(t,x,y)=>{
    instead. Its two BEDS sit across the mouth, one either side — swale in the middle,
    a straight line of three. */
 function swaleFace(t,x,y){
-  // ONLY ground that actually leans sideways at the channel turns the swale — the first
-  // couple of tiles of a graded bank. Ordinary stair-step ground, however steep it falls
-  // toward the bottom of the map, keeps the swale facing straight downhill.
-  if(t&&t.tilt&&(t.tiltMag||0)>0.30&&(t.bank||9)<=2)return t.tilt>0?'E':'W';
-  return 'S';
+  // ONLY ground that actually leans sideways at the BIG WASH turns the swale, and only
+  // the first couple of tiles of that graded bank. Ordinary stair-step ground, however
+  // steep it falls toward the bottom of the map, keeps the swale facing straight downhill.
+  if(!t||!t.tilt)return 'S';
+  if((t.tiltMag||0)<=0.30||(t.bank||9)>2)return 'S';
+  // …and the little creeks do not count. A shallow creek lying between this tile and the
+  // wash is ignored entirely — a swale never turns to face the small stream.
+  for(let d=1;d<(t.bank||1);d++){
+    const q=tileAt(x+t.tilt*d,y);
+    if(!q)return 'S';
+    if(q.type==='creek')return 'S';
+    if(q.type==='wash')break;
+  }
+  return t.tilt>0?'E':'W';
 }
 function swaleBedSpots(x,y,face){ // the two tiles across the mouth, perpendicular to the facing
   return face==='S'?[[x-1,y],[x+1,y]]:[[x,y-1],[x,y+1]];
 }
-function swaleFaceAngle(face){return face==='E'?Math.PI/2:(face==='W'?-Math.PI/2:0);}
+function swaleFaceAngle(face){ // turns the scoop's local +Z (its earth bank) to point this way
+  return face==='E'?Math.PI/2:(face==='W'?-Math.PI/2:0);}
 function neighbors(x,y){return [tileAt(x-1,y),tileAt(x+1,y),tileAt(x,y-1),tileAt(x,y+1)].filter(Boolean);}
 function countAll(fn){let n=0;for(const row of S.grid)for(const t of row)if(fn(t))n++;return n;}
 const BDA_CAP=12;
@@ -2446,32 +2488,37 @@ function buildTile(x,y){
         w.scale.set(s,1,s);g.add(w);
       }
     } else if(t.type==='swale'){
-      /* THE SWALE — one tile: a half-moon scoop cut into the ground with a raised
-         earth lip curving around the back of it, and its mouth standing open the way
-         the water wants to run. The whole thing is built facing +Z and then turned. */
+      /* THE SWALE — one tile. A half-moon scoop dug out of the ground with the spoil
+         thrown up as a curved earth bank on the DOWNHILL side, exactly like a real one:
+         the arc points the way the water is running, and the open mouth faces uphill to
+         swallow whatever comes down at it.
+         Local frame: the bank is the +Z half, the mouth is the -Z half. rotation.y then
+         turns +Z to face downhill — or at the channel, on ground that leans that way. */
       const face=t.face||swaleFace(t,x,y);
       const scoop=new THREE.Group();
       scoop.rotation.y=swaleFaceAngle(face);
       g.add(scoop);
-      const R=0.44, lipH=0.15, lipY=0.255, floorY=0.185;
-      // the curved earth lip: a half-ring wall standing around the closed side
+      const R=0.44, lipH=0.16, lipY=0.26, floorY=0.185;
+      // the curved earth bank, standing around the downhill half
       const lip=new THREE.Mesh(
-        new THREE.CylinderGeometry(R+0.045,R+0.055,lipH,22,1,true,Math.PI/2,Math.PI),M.sand[1]);
+        new THREE.CylinderGeometry(R+0.045,R+0.06,lipH,22,1,true,-Math.PI/2,Math.PI),M.sand[1]);
       lip.position.y=lipY;lip.castShadow=true;lip.receiveShadow=true;scoop.add(lip);
-      // and the two horns where the lip meets the mouth, so it reads as a crescent
+      // the two horns where the bank tapers out at the mouth, so it reads as a crescent
       for(const sx of [-1,1]){
-        const horn=new THREE.Mesh(new THREE.BoxGeometry(0.1,lipH,0.13),M.sand[1]);
-        horn.position.set(sx*(R+0.02),lipY,0.03);scoop.add(horn);
+        const horn=new THREE.Mesh(new THREE.BoxGeometry(0.1,lipH*0.8,0.14),M.sand[1]);
+        horn.position.set(sx*(R+0.03),lipY-0.015,-0.04);scoop.add(horn);
       }
-      // the sunken floor: a half-disc of dark, damp ground
-      const floor=new THREE.Mesh(new THREE.CircleGeometry(R+0.04,22,Math.PI/2,Math.PI),M.swaleDeep);
-      floor.rotation.x=-Math.PI/2;floor.rotation.z=Math.PI;   // CircleGeometry sweeps in XY, so lie it down
+      // the sunken floor: a half-disc of dark, damp ground, filling the same half as the bank
+      const mkHalf=(rad,mat)=>{ // CircleGeometry sweeps in XY, so cut the y<=0 half and lie it down
+        const m=new THREE.Mesh(new THREE.CircleGeometry(rad,22,Math.PI,Math.PI),mat);
+        m.rotation.x=-Math.PI/2; return m;
+      };
+      const floor=mkHalf(R+0.04,M.swaleDeep);
       floor.position.y=floorY;floor.receiveShadow=true;scoop.add(floor);
       // and the water standing in it
       const fill=raining?1:(t.stored>0?Math.min(1,t.stored/swaleCap(x,y)):0);
       if(fill>0){
-        const w=new THREE.Mesh(new THREE.CircleGeometry(R*(0.55+0.45*fill),22,Math.PI/2,Math.PI),M.water);
-        w.rotation.x=-Math.PI/2;w.rotation.z=Math.PI;
+        const w=mkHalf(R*(0.55+0.45*fill),M.water);
         w.position.y=raining?0.315:0.215;
         scoop.add(w);
       }
@@ -3412,7 +3459,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v7.2 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v7.3 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
