@@ -438,42 +438,50 @@
      one big action) directly above it, and the gear in the corner. The map
      keeps the whole top of the screen. Sizing follows the genre: ~66px cards,
      3px chocolate borders, one oversized primary button. */
-  #pod{position:absolute;left:50%;transform:translateX(-50%);bottom:calc(var(--dockH,96px) + 4px);z-index:6;
-    width:min(420px,calc(100% - 96px));background:rgba(255,251,238,.96);border:3px solid var(--ink);
-    border-radius:16px;box-shadow:0 4px 0 rgba(74,48,24,.42),0 8px 18px rgba(74,48,24,.18);
-    padding:7px 9px 8px;display:flex;flex-direction:column;gap:5px;pointer-events:auto;}
+  /* the top bar: wave, resources and hearts hug the top edge in one slim strip */
+  #pod{position:absolute;left:6px;right:6px;top:calc(4px + env(safe-area-inset-top,0px));bottom:auto;
+    transform:none;width:auto;z-index:6;
+    background:rgba(255,251,238,.94);border:2.5px solid var(--ink);
+    border-radius:13px;box-shadow:0 3px 0 rgba(74,48,24,.35),0 6px 14px rgba(74,48,24,.15);
+    padding:3px 8px 4px;display:flex;flex-direction:column;gap:3px;pointer-events:auto;}
   #pod.hidden{display:none;}
-  #podHead{display:flex;align-items:baseline;justify-content:space-between;gap:8px;}
-  #podWave{font-family:var(--fun);font-size:13.5px;letter-spacing:.4px;color:var(--ink);}
-  #podClock{font-family:var(--fun);font-size:19px;color:var(--terraD);line-height:1;}
-  #pod.fight #podClock{color:#b5432a;}
-  #podBar{height:6px;border-radius:4px;background:#e7d5ac;overflow:hidden;border:1px solid #cbb083;}
+  #podHead{display:flex;align-items:center;gap:6px;padding-right:104px;min-height:17px;}
+  #podWave{font-family:var(--fun);font-size:11px;letter-spacing:.3px;color:var(--ink);flex:0 0 auto;white-space:nowrap;}
+  #podClock,#podClock.gone{display:none;}
+  #podBar{height:4px;border-radius:3px;background:#e7d5ac;overflow:hidden;border:1px solid #cbb083;}
   #podBar i{display:block;height:100%;width:0;background:linear-gradient(90deg,#e9a13b,#d9773b);transition:width .25s linear;}
-  #podRes{display:flex;gap:4px;flex-wrap:wrap;justify-content:center;}
+  #podRes{display:flex;gap:4px;flex-wrap:wrap;justify-content:flex-start;flex:1 1 auto;min-width:0;}
   #podRes .rc{display:inline-flex;align-items:center;gap:2px;background:var(--sandL,#fdf1d4);
-    border:2px solid #e2cb9c;border-radius:8px;padding:0 5px;font-size:11px;font-weight:700;color:#5b4426;}
+    border:1.5px solid #e2cb9c;border-radius:7px;padding:0 5px;font-size:11.5px;font-weight:800;color:#5b4426;}
   #podRes .rc.bump{animation:chipbump .34s ease;}
-  #podHearts{display:flex;gap:6px;flex-wrap:wrap;justify-content:center;align-items:center;font-size:9.5px;line-height:1.05;color:#6b5334;}
+  #podHearts{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-start;align-items:center;font-size:9px;line-height:1;color:#6b5334;}
   #podHearts b{font-weight:800;}
-  #podHearts .hh{letter-spacing:-1px;}
-  #podAct{width:100%;border:3px solid #8a6410;border-radius:12px;padding:7px 10px;cursor:pointer;
+  #podHearts .hh{letter-spacing:-1.5px;}
+  /* the one big action, alone on the bottom edge above the hand */
+  #podAct{position:absolute;left:8px;right:62px;bottom:calc(var(--dockH,96px) + 6px);z-index:6;
+    border:3px solid #8a6410;border-radius:12px;padding:6px 10px;cursor:pointer;
     background:linear-gradient(180deg,#ffe08a,#f5bb32 55%,#e0a11c);color:#4a3008;
     font-family:var(--fun);font-size:16px;letter-spacing:.3px;text-shadow:0 1px 0 rgba(255,255,255,.55);
     box-shadow:0 4px 0 #a97f14;display:flex;align-items:center;justify-content:center;gap:7px;}
-  #podAct small{font-size:11px;opacity:.85;font-family:inherit;}
+  #podAct.hidden{display:none;}
+  #podAct small{font-size:12px;opacity:.85;font-family:inherit;}
   #podAct:active{transform:translateY(3px);box-shadow:0 1px 0 #a97f14;}
   #podAct.speed{background:linear-gradient(180deg,#cfe9ff,#8fc4ee 55%,#5da5dd);border-color:#2f6f9f;
     color:#123449;box-shadow:0 4px 0 #2f6f9f;}
   #podAct.speed.on{background:linear-gradient(180deg,#b6f0cf,#5fce93 55%,#2f9f63);border-color:#1d6b40;
     color:#0f3a22;box-shadow:0 4px 0 #1d6b40;}
 
-  /* the gear — one corner button for everything that is not the game */
-  #gearBtn{position:absolute;right:10px;bottom:calc(var(--dockH,96px) + 8px);z-index:7;
-    width:46px;height:46px;border-radius:50%;font-size:21px;line-height:1;cursor:pointer;
-    background:linear-gradient(180deg,#fffdf4,#f0e2c2);border:3px solid var(--ink);
-    box-shadow:0 4px 0 rgba(74,48,24,.42);color:#5b4426;}
-  #gearBtn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(74,48,24,.42);}
-  #gearBtn.open{background:linear-gradient(180deg,#ffe6ae,#f0c86a);}
+  /* the gear — a drawn, translucent glyph, not a text label sitting off-centre */
+  #gearBtn{position:absolute;right:8px;bottom:calc(var(--dockH,96px) + 6px);z-index:7;
+    width:46px;height:46px;border-radius:50%;cursor:pointer;padding:0;
+    font-size:0;line-height:0;color:transparent;text-indent:-999px;overflow:hidden;
+    background-color:rgba(255,251,238,.3);
+    background-image:url("data:image/svg+xml;utf8,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpolygon points='23.28,10.33 23.28,13.67 19.91,14.15 19.11,16.08 21.16,18.79 18.79,21.16 16.08,19.11 14.15,19.91 13.67,23.28 10.33,23.28 9.85,19.91 7.92,19.11 5.21,21.16 2.84,18.79 4.89,16.08 4.09,14.15 0.72,13.67 0.72,10.33 4.09,9.85 4.89,7.92 2.84,5.21 5.21,2.84 7.92,4.89 9.85,4.09 10.33,0.72 13.67,0.72 14.15,4.09 16.08,4.89 18.79,2.84 21.16,5.21 19.11,7.92 19.91,9.85' fill='%234a2c14' fill-opacity='0.4'/%3E%3Ccircle cx='12' cy='12' r='4.1' fill='%234a2c14' fill-opacity='0.16'/%3E%3C/svg%3E");
+    background-size:28px 28px;background-position:center center;background-repeat:no-repeat;
+    border:2px solid rgba(74,48,24,.22);box-shadow:0 3px 0 rgba(74,48,24,.14);
+    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
+  #gearBtn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(74,48,24,.22);}
+  #gearBtn.open{background-color:rgba(255,214,130,.75);border-color:rgba(74,48,24,.6);}
   #leftRail{position:absolute;left:auto;right:10px;bottom:calc(var(--dockH,96px) + 62px);z-index:8;
     display:flex;flex-direction:column;gap:5px;width:210px;
     background:rgba(255,251,238,.97);border:3px solid var(--ink);border-radius:14px;padding:7px;
@@ -492,43 +500,52 @@
     padding:4px 6px calc(8px + env(safe-area-inset-bottom,0px));}
   body.bottomdock #dockInner{max-height:none;overflow:visible;flex-direction:column;gap:0;}
   body.bottomdock #dockTab{display:none !important;}
+  body.bottomdock #dock.collapsed{transform:none;}
   body.bottomdock #workbar{display:flex;flex-direction:row;gap:6px;overflow-x:auto;overflow-y:hidden;
     padding:3px 2px 6px;align-items:stretch;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
   body.bottomdock #workbar::-webkit-scrollbar{display:none;}
   body.bottomdock #workbar .cap,body.bottomdock #workbar .docknote{display:none;}
-  body.bottomdock #workbar .tcard{flex:0 0 auto;width:72px;height:88px;margin:0;padding:5px 3px 5px;overflow:hidden;
-    display:flex;flex-direction:column;align-items:center;justify-content:flex-start;gap:2px;
-    border-radius:13px;border:3px solid var(--ink);background:linear-gradient(180deg,#fffdf4,#f4e4bf);
+  /* icon-only cards, BTD6 style — the name is dead weight, the price is what you read */
+  body.bottomdock #workbar .tcard{flex:0 0 auto;width:60px;height:68px;margin:0;padding:3px 2px;overflow:hidden;
+    display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:0;
+    border-radius:12px;border:3px solid var(--ink);background:linear-gradient(180deg,#fffdf4,#f4e4bf);
     box-shadow:0 3px 0 rgba(74,48,24,.4);}
-  body.bottomdock #workbar .tcard .trow{flex-direction:column;gap:1px;align-items:center;text-align:center;}
-  body.bottomdock #workbar .tcard .tic{font-size:22px;line-height:1;}
-  body.bottomdock #workbar .tcard b{font-size:7.8px;line-height:1.06;max-width:66px;height:17px;
-    overflow:hidden;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
-  /* one cost strip per card instead of a stack of pills — three costs still fit on two lines */
-  body.bottomdock #workbar .tcard .tcost{display:block;text-align:center;margin-top:auto;max-width:100%;
-    background:#f6e8c8;border:1.5px solid #e0cda2;border-radius:7px;padding:1px 3px;line-height:1.15;}
+  body.bottomdock #workbar .tcard .trow{flex-direction:column;gap:0;align-items:center;text-align:center;flex:1 1 auto;justify-content:center;}
+  body.bottomdock #workbar .tcard .tic{font-size:26px;line-height:1;}
+  body.bottomdock #workbar .tcard b{display:none;}
+  /* the price strip: the one piece of text on the card, so make it readable */
+  body.bottomdock #workbar .tcard .tcost{display:block;text-align:center;margin-top:0;max-width:100%;width:100%;
+    background:#f6e8c8;border:1.5px solid #e0cda2;border-radius:7px;padding:0 1px;line-height:1.2;box-sizing:border-box;
+    min-height:15px;}
   body.bottomdock #workbar .tcard .tcost .cc,
   body.bottomdock #workbar .tcard .tcost .cchip{display:inline;background:none;border:0;padding:0 1px;
-    font-size:8px;font-weight:800;color:#5b4426;border-radius:0;}
+    font-size:10.5px;font-weight:800;color:#5b4426;border-radius:0;white-space:nowrap;}
   body.bottomdock #workbar .tcard .tcost .cc.no,
   body.bottomdock #workbar .tcard .tcost .cchip.no{color:#c1502e;}
   body.bottomdock #workbar .tcard.armed{background:linear-gradient(180deg,#c8f6d8,#7fd9a4);
     border-color:#1d6b40;box-shadow:0 3px 0 #1d6b40;}
   body.bottomdock #workbar .tcard.broke{opacity:.45;}
-  body.bottomdock #workbar .tcard.cancel{width:52px;}
+  body.bottomdock #workbar .tcard.cancel{width:44px;}
+  body.bottomdock #workbar .tcard.cancel .tcost{display:none;}
   /* with a bottom dock the old floating bits get out of the way */
   body.bottomdock #endFab{display:none !important;}
   body.bottomdock #bigClock{display:none !important;}
-  body.bottomdock #status{left:8px;right:8px;top:78px;bottom:auto;max-width:none;
-    text-align:center;font-size:12px;pointer-events:none;background:rgba(255,251,238,.9);}
+  /* the running commentary sits down by your thumb, not across the sky */
+  body.bottomdock #status{left:8px;right:8px;top:auto;bottom:calc(var(--dockH,96px) + 52px);max-width:none;
+    text-align:center;font-size:11.5px;line-height:1.25;padding:4px 9px;pointer-events:none;
+    background:rgba(255,251,238,.9);}
   body.bottomdock #camhint{display:none;}
-  body.bottomdock #nowchip{top:118px;bottom:auto;}
-  body.bottomdock #goalsBox{top:34px;}
+  body.bottomdock #nowchip{top:60px;bottom:auto;font-size:11.5px;padding:3px 11px;}
+  body.bottomdock #goalsBox{top:92px;left:auto;right:6px;width:auto;max-width:52vw;padding:2px 8px 3px;}
+  body.bottomdock #goalsBox.min{padding:2px 8px;}
+  /* the day / tomorrow's weather sits in the very top-right corner, over the bar */
+  body.bottomdock #hud{top:calc(7px + env(safe-area-inset-top,0px));left:auto;right:12px;
+    width:auto;justify-content:flex-end;flex-wrap:nowrap;z-index:7;gap:4px;}
+  body.bottomdock #hud .pill{font-size:11px;padding:1px 7px;border-radius:9px;}
+  body.bottomdock #hud .pill.hidden{display:none;}
   @media (max-width:520px){
-    #pod{width:calc(100% - 78px);left:8px;transform:none;}
     #podAct{font-size:15px;}
-    body.bottomdock #workbar .tcard{width:66px;height:86px;}
-    body.bottomdock #workbar .tcard .tic{font-size:21px;}
+    #podHead{padding-right:100px;}
   }
 
 </style>
@@ -550,17 +567,17 @@
       <div id="bcSep2"></div>
       <div id="chips"></div>
     </div>
-    <!-- THE POD: everything you need mid-fight, in one block under your thumb -->
+    <!-- THE BAR: wave, resources and hearts along the top edge, out of the map's way -->
     <div id="pod" class="hidden">
       <div id="podHead">
         <span id="podWave">WAVE 1 / 6</span>
-        <span id="podClock">⛈ 36s</span>
+        <div id="podRes"></div>
+        <span id="podClock" class="gone"></span>
       </div>
       <div id="podBar"><i></i></div>
-      <div id="podRes"></div>
       <div id="podHearts"></div>
-      <button id="podAct">⛈ <b>CALL STORM</b><small>+27💧</small></button>
     </div>
+    <button id="podAct" class="hidden">⛈ <b>NEXT WAVE</b><small>39s</small></button>
     <div id="nowchip" class="hidden" title="Your next objective — tap to show me where"><span class="tgt">🎯</span><span id="nowtext"></span></div>
     <div id="status">Just click the land — it offers what fits. Drag to orbit.</div>
     <div id="camhint">drag orbit · shift-drag paints · rt-click: harvest / berm-a-swale · space ends day</div>
@@ -570,7 +587,7 @@
     <div class="panel hidden" id="weatherbox"></div>
   </div>
   <div id="hud">
-    <span class="pill brand">🌵 <span id="verlabel">v7.0</span></span>
+    <span class="pill brand hidden">🌵 <span id="verlabel">v7.1</span></span>
     <span class="pill" id="daybox"></span>
     <span class="pill" id="wpill"></span>
     <span class="pill" id="timerpill" title="The day ends when the sun does — spend your energy fast!">⏳</span>

@@ -135,8 +135,8 @@ function dfdUnlocks(){
   const add=(id,msg)=>{if(!S.unlocked.includes(id)){S.unlocked.push(id);if(msg)log('🔓 '+msg);}};
   if(D.wave>=1)add('ord','New defense: 🪨 ROCK DAMS — calm the creeks, and they stop rockslides cold.');
   if(D.wave>=2){add('bda','New defense: 🪵 WASH DAMS — pond the surge and SNAG the log rams (+2 wood each).');
-    add('scare','New craft: 🎃 SCARECROW (3 🧺) — raiders within 2 tiles flee at dusk.');}
-  if(D.wave>=3)add('fence','New craft: 🌵 CACTUS FENCE (2 🧺) — a living wall; raiders can´t pass its touch.');
+    add('scare','New craft: 🎃 SCARECROW (2🪵 1🪨) — raiders within 2 tiles flee at dusk.');}
+  if(D.wave>=3)add('fence','New craft: 🌵 CACTUS FENCE (3💧 1🪵) — a living wall; raiders can´t pass its touch.');
   if(D.wave>=4){add('fillbag','Camp actions open: earthbags and hauling.');add('haul');add('cistern');}
 }
 function dfdVictory(){
@@ -191,7 +191,7 @@ function dfdResolveRaids(){
     } else { // coyote
       const coop=dfdFindType('coop');
       if(coop&&fenced(coop.x,coop.y)){popAt(coop.x,coop.y,'🌵 turned!',300,'earth');log('The coyote circled the cactus fence all night and left hungry. 🌵');}
-      else if(D.coopHP>0){D.coopHP--;S.food=Math.max(0,S.food-2);if(coop)popAt(coop.x,coop.y,'🐺 −1 ❤ −2 🥣',300,'bad');
+      else if(D.coopHP>0){D.coopHP--;if(coop)popAt(coop.x,coop.y,'🐺 −1 ❤',300,'bad');
         log('A coyote got into the coop — the birds are fewer and the wire is torn. 🐺');
         if(D.coopHP<=0)log('🐔 The coop is wrecked — no more morning eggs until the season ends.');}
       else {D.houseHP=Math.max(1,D.houseHP-1);log('A coyote prowled the porch all night — nobody slept. 🐺 (house −1)');}
@@ -201,7 +201,9 @@ function dfdResolveRaids(){
 }
 function dfdEconomy(){
   const D=S.dfd; if(!D||D.lost)return;
-  if(D.coopHP>0){S.food+=2;const c=dfdFindType('coop');if(c){popAt(c.x,c.y,'+2 🥣 eggs',500,'good');flyRes(c.x,c.y,'food','🥚',2);}}
+  // the coop's trough and roof pay a small trickle of water every half-minute
+  if(D.coopHP>0){S.water=Math.min(S.waterCap,S.water+2);const c=dfdFindType('coop');
+    if(c){popAt(c.x,c.y,'+2 💧',500,'good');flyRes(c.x,c.y,'water','💧',2);}}
   // rotational grazing: the herd eats down its paddock; rested pasture pays double
   const h=D.herd?tileAt(D.herd.x,D.herd.y):null;
   if(h&&h.type==='paddock'){
@@ -3375,7 +3377,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v7.0 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v7.1 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -3383,13 +3385,9 @@ function refresh(){
   const showBags=isUnlocked('fillbag')||S.bags>0;
   document.getElementById('chips').innerHTML=
     `<span class="chip${bump('water')}" data-k="water">💧 ${S.water}<small>/${S.waterCap}L</small></span>`+
-    `<span class="chip${bump('food')}" data-k="food">🥣 ${S.food} <small>food</small></span>`+
-    `<span class="chip${bump('seeds')}" data-k="seeds">🌰 ${S.seeds} <small>seeds</small></span>`+
-    `<span class="chip${bump('dirt')}" data-k="dirt">🟤 ${S.dirt} <small>dirt</small></span>`+
     (showStone?`<span class="chip${bump('stone')}" data-k="stone">🪨 ${S.stone} <small>stone</small></span>`:'')+
     (showWood?`<span class="chip${bump('wood')}" data-k="wood">🪵 ${S.wood} <small>wood</small></span>`:'')+
-    (showBags?`<span class="chip${bump('bags')}" data-k="bags">🧱 ${S.bags} <small>bags</small></span>`:'')+
-    (S.mode==='defend'&&S.dfd?`<span class="chip${bump('sup')}" data-k="sup">🧺 ${S.dfd.supplies} <small>supplies</small></span>`:'');
+    (showBags?`<span class="chip${bump('bags')}" data-k="bags">🧱 ${S.bags} <small>bags</small></span>`:'');
   prevRes=res;
   buildToolbar();
   const daysTo=Math.max(0,(S.lastRainDay+5)-S.day);
@@ -3534,13 +3532,10 @@ function nowObjective(){
     if(!D.ghBuilt&&S.unlocked.includes('green'))
       return {key:'dfd:green',text:'🏡 Build the greenhouse — +6 ❤',
         full:'The house came with the land; nothing else did. A greenhouse on the flat is six more hearts of armor AND a bed that never dries — the only place corn grows without a cistern.',hint:null};
-    if(!D.herd&&S.unlocked.includes('paddock'))
-      return {key:'dfd:pad',text:'🐐 Build a paddock — the herd pays 🧺',
-        full:'Fence a paddock on the flat and the goats move in. Graze one, rest the others: rested pasture pays double 🧺, and 🧺 buy scarecrows and cactus fence.',hint:null};
     if(!D.coopBuilt&&S.unlocked.includes('coop'))
-      return {key:'dfd:coop',text:'🐔 Build the coop — +6 ❤ and eggs',
-        full:'The coop is six more hearts of armor and it pays 🧺 + 🥣 every half-minute. Coyotes come for it — put a 🌵 fence beside it.',hint:null};
-    return {key:'dfd:prep'+D.wave,text:`${nw.type==='wet'?'🌧':'☀️'} Wave ${D.wave+1} in ${Math.max(0,Math.ceil(D.phaseT))}s — place towers`,
+      return {key:'dfd:coop',text:'🐔 Build the coop — +6 ❤',
+        full:'The coop is six more hearts of armor and it trickles +2 💧 every half-minute, and its birds eat grasshoppers and ants. Coyotes come for it — put a 🌵 fence beside it.',hint:null};
+    return {key:'dfd:prep'+D.wave,text:`${nw.type==='wet'?'🌧 Wet wave next — dig swales to bank it':(nw.type==='spell'?'🌡 Dry spell next — nothing comes but the heat':'☀️ Dry wave next — shade, fences, shooters')}`,
       full:`Next: ${dfdPreviewStr(D.wave)}. ${nw.type==='wet'?'Wet wave — swale pairs and dams turn the monsters into money.':'DRY wave — heat imps drink your water and raiders come for the farm. Scarecrows, fences, and shooters.'}`,hint:'pair'};
   }
   if(S.mode==='campaign'){
@@ -3594,7 +3589,7 @@ function hintTarget(h){
         ||(S.bags>=4?findTile((t,x,y)=>canAct('home',t,x,y)):null); // short on bags → the dock button is already highlighted
     case 'cistern':case 'green':return S.bags>=(h==='cistern'?4:6)?findTile((t,x,y)=>canAct(h,t,x,y)):null;
     default:
-      if(h.startsWith('plant-'))return S.seeds>0?findTile(t=>(t.type==='bed'||t.type==='green')&&!t.plant):null;
+      if(h.startsWith('plant-'))return findTile(t=>(t.type==='bed'||t.type==='green')&&!t.plant);
       return null;
   }
 }
@@ -3783,26 +3778,25 @@ const DWAVES=[
  {type:'wet', drops:6, surge:6, rocks:3, logs:4},
 ];
 const PREP_T=45, INTER_T=26;
-// tower cards — the BTD6 dock. cost:{water,seeds,dirt,stone,wood,sup,bags}
+// tower cards — the BTD6 dock. THREE resources only: cost:{water,stone,wood}
 const TOWER_CARDS=[
- {id:'plant-pear',  ic:'🌵', name:'Prickly pear', cost:{water:3, seeds:1}, gain:'plant ANYWHERE · NEVER wilts · spreads pads · hits soft', unlockWave:0},
- {id:'pair',  ic:'⛏', name:'Berm & swale', cost:{water:4}, gain:'+2 🟤 · slurps 💧 · digs beds · keeps them from wilting', unlockWave:0},
- {id:'plant-beans', ic:'🫘', name:'Beans',   cost:{water:6, seeds:1}, gain:'rapid seed-slinger · feeds its neighbours · needs a bed', unlockWave:0},
- {id:'plant-corn',  ic:'🌽', name:'Corn',    cost:{water:10,seeds:1}, gain:'kernel lobber · tassels seed · BASE GARDEN only', unlockWave:1},
+ {id:'plant-pear',  ic:'🌵', name:'Prickly pear', cost:{water:3}, gain:'plant ANYWHERE · NEVER wilts · spreads pads · hits soft', unlockWave:0},
+ {id:'pair',  ic:'⛏', name:'Berm & swale', cost:{water:4}, gain:'slurps 💧 · digs beds · keeps them from wilting', unlockWave:0},
+ {id:'plant-beans', ic:'🫘', name:'Beans',   cost:{water:6}, gain:'rapid seed-slinger · feeds its neighbours · needs a bed', unlockWave:0},
+ {id:'plant-corn',  ic:'🌽', name:'Corn',    cost:{water:10}, gain:'kernel lobber · tassels 💧 · BASE GARDEN only', unlockWave:1},
  {id:'sling', ic:'🪀', name:'Sling tower', cost:{stone:2,wood:2}, gain:'cracks boulders into cobbles · upgrades to a trebuchet', unlockWave:1},
- {id:'plant-squash',ic:'🎃', name:'Squash',  cost:{water:8, seeds:1}, gain:'runs VINES — slows and grinds everything beside it', unlockWave:2},
- {id:'bda',   ic:'🪵', name:'Wash dam',  cost:{wood:3,dirt:1}, gain:'walls the wash · woven logs raise its cap · silts up into terraces', unlockWave:2},
+ {id:'plant-squash',ic:'🎃', name:'Squash',  cost:{water:8}, gain:'runs VINES — slows and grinds everything beside it', unlockWave:2},
+ {id:'bda',   ic:'🪵', name:'Wash dam',  cost:{wood:3,stone:1}, gain:'walls the wash · woven logs raise its cap · silts up into terraces', unlockWave:2},
  {id:'ord',   ic:'🪨', name:'Rock dam',  cost:{stone:2}, gain:'creeks only · grinds what passes', unlockWave:1},
- {id:'scare', ic:'🎃', name:'Scarecrow', cost:{sup:3}, gain:'raiders flee its gaze', unlockWave:3},
- {id:'fence', ic:'🌵', name:'Cactus fence', cost:{sup:2}, gain:'walls out raiders', unlockWave:4},
+ {id:'scare', ic:'👻', name:'Scarecrow', cost:{wood:2,stone:1}, gain:'raiders flee its gaze', unlockWave:3},
+ {id:'fence', ic:'🚧', name:'Cactus fence', cost:{water:3,wood:1}, gain:'walls out raiders', unlockWave:4},
  {id:'cistern',ic:'🛢', name:'Cistern', cost:{stone:3,wood:3}, gain:'+50 💧 cap · waters the base garden · flat only', unlockWave:2},
- {id:'green', ic:'🏡', name:'Greenhouse', cost:{water:6,wood:3,stone:1}, gain:'+6 ❤ armor · a bed that NEVER dries · flat only', unlockWave:1},
- {id:'paddock',ic:'🐐', name:'Paddock', cost:{water:3,dirt:1}, gain:'pasture · graze it for 🧺 · first one brings the herd', unlockWave:1},
- {id:'coop',  ic:'🐔', name:'Chicken coop', cost:{wood:3,dirt:2}, gain:'+6 ❤ armor · +1 🧺 & +2 🥣 every 30s · flat only', unlockWave:2},
- {id:'ramada',ic:'⛱', name:'Ramada', cost:{wood:2,sup:1}, gain:'shade: halves drying for 2 tiles · bogs down dust devils', unlockWave:2},
- {id:'mulch', ic:'🍂', name:'Mulch', cost:{sup:1}, gain:'on a bed or berm: half the drying, devil-proof', unlockWave:1},
- {id:'dog',   ic:'🐕', name:'Guardian dog', cost:{sup:5}, gain:'patrols 3 tiles · turns raiders · water walks past', unlockWave:4},
- {id:'grey',  ic:'♻️', name:'Greywater bed', cost:{wood:2,dirt:1}, gain:'closes the loop: a slow trickle to the base garden · flat only', unlockWave:3},
+ {id:'green', ic:'🏡', name:'Greenhouse', cost:{water:6,wood:4}, gain:'+6 ❤ armor · a bed that NEVER dries · flat only', unlockWave:1},
+ {id:'coop',  ic:'🐔', name:'Chicken coop', cost:{wood:3,stone:2}, gain:'+6 ❤ armor · birds eat pests · +2 💧 every 30s · flat only', unlockWave:2},
+ {id:'ramada',ic:'⛱', name:'Ramada', cost:{wood:2,stone:1}, gain:'shade: halves drying for 2 tiles · bogs down dust devils', unlockWave:2},
+ {id:'mulch', ic:'🍂', name:'Mulch', cost:{wood:1}, gain:'on a bed or berm: half the drying, devil-proof', unlockWave:1},
+ {id:'dog',   ic:'🐕', name:'Guardian dog', cost:{water:4,wood:2}, gain:'patrols 3 tiles · turns raiders · water walks past', unlockWave:4},
+ {id:'grey',  ic:'♻️', name:'Greywater bed', cost:{wood:2,stone:1}, gain:'closes the loop: a slow trickle to the base garden · flat only', unlockWave:3},
  {id:'upT',   ic:'⬆️', name:'Upgrade', cost:{}, gain:'tap a work to improve it — dams, sling, cistern, the house itself', unlockWave:1},
  {id:'clearT', ic:'🧹', name:'Clear', cost:{}, gain:'remove a work · clear choked fence & weeds', unlockWave:0},
 ];
@@ -3916,15 +3910,15 @@ function almanacFor(t){
   return ALMANAC[t.type]||'';
 }
 function dfdCard(id){return TOWER_CARDS.find(c=>c.id===id);}
+/* THREE resources, and only three: water, stone, wood. Anything a card or an
+   upgrade used to cost in seeds, dirt or supplies is priced in these now. */
 function dfdAfford(c){
-  const k=c.cost;
-  return (!k.water||S.water>=k.water)&&(!k.seeds||S.seeds>=k.seeds)&&(!k.dirt||S.dirt>=k.dirt)
-    &&(!k.stone||S.stone>=k.stone)&&(!k.wood||S.wood>=k.wood)&&(!k.sup||S.dfd.supplies>=k.sup);
+  const k=c.cost||{};
+  return (!k.water||S.water>=k.water)&&(!k.stone||S.stone>=k.stone)&&(!k.wood||S.wood>=k.wood);
 }
 function dfdPay(c){
-  const k=c.cost;
-  if(k.water)S.water-=k.water; if(k.seeds)S.seeds-=k.seeds; if(k.dirt)S.dirt-=k.dirt;
-  if(k.stone)S.stone-=k.stone; if(k.wood)S.wood-=k.wood; if(k.sup)S.dfd.supplies-=k.sup;
+  const k=c.cost||{};
+  if(k.water)S.water-=k.water; if(k.stone)S.stone-=k.stone; if(k.wood)S.wood-=k.wood;
 }
 function upgradeSpec(t){ // one card, many improvements — tap the thing you want better
   if(!t)return null;
@@ -3997,22 +3991,20 @@ function dfdPlace(id,x,y){
     if(t.weed){t.weed=false;SFX.gather();popAt(x,y,'🧹 pulled the weeds',0,'good');refresh();return true;}
     if(t.type==='fence'&&t.choke){t.choke=0;SFX.gather();popAt(x,y,'🧹 cleared the fence',0,'good');refresh();return true;}
     if(['swale','berm','bed','ord','scare','fence','sling','ramada','dog','grey','paddock'].includes(t.type)){
-      if(t.type==='berm')S.dirt++;
-      if(t.type==='bed'&&t.plant)S.seeds++;
       t.type='sand';t.plant=null;t.stored=0;t.moisture=0;SFX.dig();bounceTile(x,y);
       refresh();return true;
     }
-    if(t.type==='wash'&&t.dam&&!t.beaver){t.dam=false;t.stored=0;S.dirt++;SFX.dig();refresh();return true;}
+    if(t.type==='wash'&&t.dam&&!t.beaver){t.dam=false;t.stored=0;SFX.dig();refresh();return true;}
     if(t.beaver){say('The beavers are not leaving. This is their dam now. 🦫');return false;}
     say('Clear removes your own works — and boulders, trees and driftwood, which pay you 🪨/🪵 and free the tile.');
     return false;
   }
-  if(id!=='upT'&&!dfdAfford(c)){say('Can´t afford it yet — '+dfdCostStr(c)+'.');flashChip(c.cost.water?'water':(c.cost.seeds?'seeds':(c.cost.stone?'stone':(c.cost.wood?'wood':'sup'))));return false;}
+  if(id!=='upT'&&!dfdAfford(c)){say('Can´t afford it yet — '+dfdCostStr(c)+'.');flashChip(c.cost.water?'water':(c.cost.stone?'stone':'wood'));return false;}
   if(id!=='clearT'&&!dfdCanPlace(id,x,y)){say(dfdPlaceHint(id));return false;}
   const t=tileAt(x,y);
   dfdPay(c);
   if(id==='pair'){
-    t.type='swale';t.deco=null;S.dirt+=2;
+    t.type='swale';t.deco=null;
     const b=tileAt(x,y+1);b.type='berm';b.deco=null;
     let beds=0;
     for(const dx of [-1,1]){ // the dug dirt banks its own growing pockets beside the basin
@@ -4043,14 +4035,7 @@ function dfdPlace(id,x,y){
     t.type='coop';t.deco=null;
     S.dfd.coopBuilt=true;S.dfd.coopHP=6;
     SFX.build();bounceTile(x,y);popAt(x,y,'🐔 +6 ❤',0,'good');
-    log('🐔 Coop built — eggs and barter every half-minute. Put a 🌵 fence beside it before the coyotes notice.');
-  }
-  else if(id==='paddock'){
-    t.type='paddock';t.deco=null;t.soil=2;t.regrow=0;
-    if(!S.dfd.herd){S.dfd.herd={x,y};popAt(x,y,'🐐 the herd moves in!',0,'good');
-      log('🐐 The goats have somewhere to stand — graze one paddock, rest the others, and the 🧺 come in.');}
-    else popAt(x,y,'🐐 pasture!',0,'earth');
-    SFX.plant();bounceTile(x,y);
+    log('🐔 Coop built — six hearts of armor, a trickle of water from the trough, and birds that eat grasshoppers and ants. Put a 🌵 fence beside it before the coyotes notice.');
   }
   else if(id==='ramada'){t.type='ramada';t.deco=null;SFX.build();bounceTile(x,y);popAt(x,y,'⛱ shade!',0,'good');}
   else if(id==='dog'){t.type='dog';t.deco=null;SFX.build();bounceTile(x,y);popAt(x,y,'🐕 on duty',0,'good');
@@ -4079,19 +4064,14 @@ function dfdPlace(id,x,y){
 function dfdCostChips(c){
   const k=c.cost||{}, p=[];
   const add=(n,ic,key)=>{if(n)p.push(`<span class="cc${dfdShort(key)<n?' short':''}">${ic}${n}</span>`);};
-  add(k.water,'💧','water');add(k.seeds,'🌰','seeds');add(k.dirt,'🟤','dirt');
-  add(k.stone,'🪨','stone');add(k.wood,'🪵','wood');add(k.sup,'🧺','sup');
+  add(k.water,'💧','water');add(k.stone,'🪨','stone');add(k.wood,'🪵','wood');
   return p.length?p.join(''):'<span class="cc free">free</span>';
 }
-function dfdShort(key){
-  if(key==='sup')return S.dfd?S.dfd.supplies:0;
-  return S[key]||0;
-}
+function dfdShort(key){return S[key]||0;}
 function dfdCostStr(c){
-  const k=c.cost, p=[];
-  if(k.water)p.push(k.water+'💧');if(k.seeds)p.push(k.seeds+'🌰');if(k.dirt)p.push(k.dirt+'🟤');
-  if(k.stone)p.push(k.stone+'🪨');if(k.wood)p.push(k.wood+'🪵');if(k.sup)p.push(k.sup+'🧺');
-  return p.join(' ');
+  const k=c.cost||{}, p=[];
+  if(k.water)p.push(k.water+'💧');if(k.stone)p.push(k.stone+'🪨');if(k.wood)p.push(k.wood+'🪵');
+  return p.length?p.join(' '):'nothing';
 }
 function dfdPlaceHint(id){
   switch(id){
@@ -4356,7 +4336,7 @@ function dfdLeak(c){
     D.leakAcc+=1;
     if(c.silt){ // silt that gets past you settles in a swale and steals its capacity for good
       const sw=findTile(t=>t.type==='swale');
-      if(sw){const q=tileAt(sw.x,sw.y);q.silt=(q.silt||0)+1;popAt(sw.x,sw.y,'🟤 silted up',0,'bad');}
+      if(sw){const q=tileAt(sw.x,sw.y);q.silt=(q.silt||0)+1;popAt(sw.x,sw.y,'silted up 🚫',0,'bad');}
     }
   }
   else if(c.kind==='surge'){
@@ -4374,7 +4354,7 @@ function dfdLeak(c){
       log('🪵 A log ram slammed a building — it is out of action for half a minute.');}
   }
   else if(c.kind==='tumble'){
-    D.supplies=Math.max(0,D.supplies-1);popAt(D.hx,ROWS-2,'🌾 −1 🧺',0,'bad');
+    S.water=Math.max(0,S.water-3);popAt(D.hx,ROWS-2,'🌾 −3 💧',0,'bad');
     // and it seeds an invasive that blocks the ground until you clear it
     const open=findTile((t,x,y)=>t.type==='sand'&&!t.deco&&!t.weed&&y>=ROWS-4);
     if(open&&Math.random()<0.6){const q=tileAt(open.x,open.y);q.weed=true;popAt(open.x,open.y,'🌾 it seeded!',0,'bad');}
@@ -4618,7 +4598,7 @@ function dfdCombat(dt){
           q.t.plant={crop:'pear',stage:0,grown:0,wilt:0,grow:0,vigor:1};
           popAt(q.x,q.y,'🌵 new pad!',0,'good');bounceTile(q.x,q.y);}
       }
-      if(t.plant.age>40&&!t.plant.fruited){t.plant.fruited=1;S.dfd.supplies++;popAt(x,y,'🍐 tuna +1🧺',0,'good');}
+      if(t.plant.age>40&&!t.plant.fruited){t.plant.fruited=1;S.water=Math.min(S.waterCap,S.water+2);popAt(x,y,'🍐 tuna +2💧',0,'good');}
     }
     if((t.type==='bed'||(t.type==='green'&&S.dfd.ghHP>0))&&t.plant){
       const P=t.plant, def=CROP_TOWER[P.crop];
@@ -4652,7 +4632,7 @@ function dfdCombat(dt){
         if(def.splash){dfdShoot(x,y,1.2,c,dmg,'kernel',def.splash*(0.6+0.4*vg));}
         else dfdShoot(x,y,1.0,c,dmg,P.crop==='beans'?'seed':'spike');
         P.shots=(P.shots||0)+1;
-        if(P.crop==='corn'&&P.shots%20===0){S.seeds++;popAt(x,y,'🌽 tasseled +1🌰',0,'good');} // self-funding artillery
+        if(P.crop==='corn'&&P.shots%20===0){S.water=Math.min(S.waterCap,S.water+1);popAt(x,y,'🌽 tasseled +1💧',0,'good');} // self-funding artillery
         cd[k]=def.cd*gRate*nit/Math.max(0.35,pw);
       }
       continue;
@@ -5195,8 +5175,7 @@ function dfdVictory2(){
 }
 function podResChips(){
   const D=S.dfd;
-  const r=[['water','💧',S.water+'/'+S.waterCap],['seeds','🌰',S.seeds],['dirt','🟤',S.dirt],
-           ['stone','🪨',S.stone],['wood','🪵',S.wood],['sup','🧺',D?D.supplies:0]];
+  const r=[['water','💧',S.water+'/'+S.waterCap],['stone','🪨',S.stone],['wood','🪵',S.wood]];
   return r.map(([k,ic,v])=>`<span class="rc" data-k="${k}">${ic} ${v}</span>`).join('');
 }
 function syncDockH(){
@@ -5208,7 +5187,8 @@ function syncDockH(){
 function renderPod(){
   const pod=document.getElementById('pod'); if(!pod)return;
   const D=S.dfd;
-  if(!(S.mode==='defend'&&D)||D.won||D.lost){pod.classList.add('hidden');return;}
+  const actEl=document.getElementById('podAct');
+  if(!(S.mode==='defend'&&D)||D.won||D.lost){pod.classList.add('hidden');if(actEl)actEl.classList.add('hidden');return;}
   pod.classList.remove('hidden');
   const W=dfdWaveComp(D.wave), n=dfdWaves().length, fighting=D.phase==='wave';
   pod.classList.toggle('fight',fighting);
@@ -5216,8 +5196,6 @@ function renderPod(){
   document.getElementById('podWave').textContent=
     (DLEVELS[D.level]&&DLEVELS[D.level].endless?`YEAR ${(D.lap||0)+1} · WAVE ${Math.min(D.wave+1,n)}`
       :`WAVE ${Math.min(D.wave+1,n)} / ${n}`);
-  const clk=document.getElementById('podClock');
-  clk.textContent=fighting&&BT?`⚔ ${BT.creeps.length+BT.spawns.length}`:`${icon} ${Math.max(0,Math.ceil(D.phaseT))}s`;
   const bar=document.querySelector('#podBar i');
   if(bar)bar.style.width=(fighting&&BT
     ? Math.round(100*(1-(BT.creeps.length+BT.spawns.length)/Math.max(1,BT.total)))
@@ -5228,24 +5206,32 @@ function renderPod(){
   const hh=(cur,max,ic)=>`<span class="hh">${ic} ${'❤️'.repeat(Math.max(0,cur))}${'🖤'.repeat(Math.max(0,max-cur))}</span>`;
   document.getElementById('podHearts').innerHTML=
     hh(D.houseHP,D.houseMax||12,'🏠')
-    +(D.ghBuilt?hh(D.ghHP,6,'🏡'):'<span class="hh" style="opacity:.55">🏡 build it</span>')
-    +(D.coopBuilt?hh(D.coopHP,6,'🐔'):'<span class="hh" style="opacity:.55">🐔 build it</span>')
-    +`<span>🌿 <b>${landScore()}%</b></span>`;
-  // the one big action: call the storm early during prep, run at double speed in a fight
+    +(D.ghBuilt?hh(D.ghHP,6,'🏡'):'')
+    +(D.coopBuilt?hh(D.coopHP,6,'🐔'):'');
+  // the one big action: start the next wave early during prep, run at double speed in a fight.
+  // the icon is the WEATHER of the wave you are about to take — wet waves pay you for nerve,
+  // dry waves just come sooner.
   const act=document.getElementById('podAct');
+  act.classList.remove('hidden');
   if(fighting){
     act.className='speed'+((D.speed||1)>1?' on':'');
     act.innerHTML=`⏩ <b>${(D.speed||1)>1?'DOUBLE TIME':'SPEED UP'}</b>`;
     act.onclick=()=>{D.speed=(D.speed||1)>1?1:2;renderPod();say(D.speed>1?'Double time. ⏩':'Back to real time.');};
   } else {
-    const bonus=Math.min(40,Math.round(Math.max(0,D.phaseT)*0.6));
+    const wet=W&&W.type==='wet';
+    const bonus=wet?Math.min(40,Math.round(Math.max(0,D.phaseT)*0.6)):0;
+    const secs=Math.max(0,Math.ceil(D.phaseT));
     act.className='';
-    act.innerHTML=`⛈ <b>CALL STORM</b><small>+${bonus}💧</small>`;
+    act.innerHTML=`${icon} <b>NEXT WAVE</b><small>${secs}s${bonus?` · +${bonus}💧`:''}</small>`;
     act.onclick=()=>{ if(D.phase==='wave')return;
-      const b2=Math.min(40,Math.round(Math.max(0,D.phaseT)*0.6));
-      D.phaseT=0;S.water=Math.min(S.waterCap,S.water+b2);
-      say(b2>=20?`Nerve pays — +${b2}💧 for calling it that early. ⛈`:`Called early — +${b2}💧. ⛈`);
-      SFX.thunder();renderPod();
+      const w2=dfdWaveComp(D.wave);
+      const b2=(w2&&w2.type==='wet')?Math.min(40,Math.round(Math.max(0,D.phaseT)*0.6)):0;
+      D.phaseT=0;
+      if(b2){S.water=Math.min(S.waterCap,S.water+b2);
+        say(b2>=20?`Nerve pays — +${b2}💧 for taking the storm that early. ⛈`:`Storm called early — +${b2}💧. ⛈`);
+        SFX.thunder();}
+      else say(w2&&w2.type==='spell'?'You called the dry spell in early. Nothing comes but the heat. 🌡':'Waved it in early — no rain in this one. ☀️');
+      renderPod();
     };
   }
 }
