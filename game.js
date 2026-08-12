@@ -464,11 +464,11 @@ const BUILD_TOOLS=['cistern','green','home'];
 let confirmRestart=false;
 function buildToolbar(){
   const workbar=document.getElementById('workbar');
-  if(S.mode==='defend'&&S.dfd){ // BTD6-style tower dock: cards on the right, tap to arm, tap the map to place
+  if(S.mode==='defend'&&S.dfd){ // the hand: a row of cards along the bottom edge, tap to arm, tap the map to place
     toolbar.innerHTML='';workbar.innerHTML='';
+    document.body.classList.add('bottomdock');
     document.getElementById('dock').style.display='';
-    document.getElementById('dockTab').style.display='';
-    dockTabLabel();
+    document.getElementById('dockTab').style.display='none';
     const cap=document.createElement('div');cap.className='cap';cap.textContent='🏗 Towers';workbar.appendChild(cap);
     for(const c of TOWER_CARDS){
       if(!S.unlocked.includes(c.id))continue;
@@ -491,9 +491,11 @@ function buildToolbar(){
     note.innerHTML='🪓 <b>Stone &amp; wood:</b> tap a 🪨 boulder or 🪵 tree to select it, tap again to take it. Free — but they don´t grow back.';
     workbar.appendChild(note);
     toolbarTail(null);
+    syncDockH();
     return;
   }
   // classic modes: no tool menus — the land is the interface. The dock only holds camp actions (earthbag, haul).
+  document.body.classList.remove('bottomdock');
   toolbar.innerHTML='';workbar.innerHTML='';
   const objs=chapterObjectives();
   const nextObj=objs?objs.find(o=>!o.check()):null;
@@ -556,6 +558,18 @@ function toolbarTail(hint){
   }
 }
 function contourBand(t){return Math.round((t.elev||0)*12);}
+function gearOpen(on){
+  const rail=document.getElementById('leftRail'), b=document.getElementById('gearBtn');
+  const want=on===undefined?rail.classList.contains('hidden'):on;
+  rail.classList.toggle('hidden',!want);
+  b.classList.toggle('open',want);
+}
+document.addEventListener('click',e=>{ // tapping the world closes the gear menu
+  const rail=document.getElementById('leftRail');
+  if(!rail||rail.classList.contains('hidden'))return;
+  if(e.target.closest('#leftRail')||e.target.closest('#gearBtn'))return;
+  gearOpen(false);
+});
 function toggleOverlay(){
   S.overlay=!S.overlay;
   if(S.overlay&&S.mode==='defend')say('〰 Contour view: tiles sharing a shade band sit at the same height. Swales built ALONG a band catch a whole sheet of water — three in a row and they share what they hold.');
@@ -3361,7 +3375,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v6.5 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v7.0 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -3410,15 +3424,10 @@ function refresh(){
   const objs=chapterObjectives();
   if(S.mode==='defend'&&S.dfd){
     const D=S.dfd, nw=D.wave<dfdWaves().length?dfdWaveComp(D.wave):null;
-    document.getElementById('goalstitle').textContent=D.lost?'💔 The season won':(D.won?'🏆 Season survived!':(D.phase==='wave'?`⚔ WAVE ${D.wave+1}/${dfdWaves().length} — FIGHT!`:`${nw&&nw.type==='wet'?'🌧':'☀️'} Wave ${D.wave+1}/${dfdWaves().length} incoming`));
+    document.getElementById('goalstitle').textContent=D.lost?'💔 The season won':(D.won?'🏆 Season survived!':'🌿 The land');
     const hb=(cur,max,ic)=>`<div class="hrow">${ic} <span class="hearts">${'❤️'.repeat(cur)}${'🖤'.repeat(Math.max(0,max-cur))}</span></div>`;
     const ghost=(ic,lbl)=>`<div class="hrow" style="opacity:.55">${ic} <span class="todo" style="display:inline">${lbl}</span></div>`;
-    const land=landScore();
-    G2.innerHTML=`<div class="todo" style="opacity:.95">💧 tank ${S.water}/${S.waterCap} · 🟫 soil ${soilWater()} · ⏬ ground ${groundWater()}</div>`
-      +`<div class="todo" style="opacity:.95">🌿 the land is healing: <b>${land}%</b>${D.spring?' · 💦 spring!':''}${D.beavers?' · 🦫×'+D.beavers:''}</div>`
-      +hb(D.houseHP,D.houseMax||12,'🏠')
-      +(D.ghBuilt?hb(D.ghHP,6,'🏡'):ghost('🏡','build it — +6 ❤'))
-      +(D.coopBuilt?hb(D.coopHP,6,'🐔'):ghost('🐔','build it — +6 ❤'))
+    G2.innerHTML=`<div class="todo" style="opacity:.95">🟫 soil ${soilWater()} · ⏬ ground ${groundWater()}${D.spring?' · 💦 spring!':''}${D.beavers?' · 🦫×'+D.beavers:''}</div>`
       +(nw&&D.phase!=='wave'?`<div class="todo">next: ${dfdPreviewStr(D.wave)}</div>`:'')
       +`<div class="todo" style="opacity:.8">${nw&&nw.type==='dry'?'dry wave — guard the water you banked':'wet wave — every drop caught is money'}</div>`
       +`<div class="fplink" onclick="location.reload()">back to title</div>`;
@@ -3647,6 +3656,11 @@ function updateNowChip(){
     if(_nowKey){chip.classList.remove('pop');void chip.offsetWidth;chip.classList.add('pop');}
     _nowKey=o.key;
   }
+}
+document.getElementById('gearBtn').addEventListener('click',e=>{e.stopPropagation();gearOpen();});
+for(const id of ['infoBtn','wvBtn','rsBtn','sndBtn','saveBtn','skiptest']){
+  const b=document.getElementById(id);
+  if(b)b.addEventListener('click',()=>setTimeout(()=>gearOpen(false),0));
 }
 document.getElementById('nowchip').addEventListener('click',()=>{
   const now=performance.now(); if(now<chipCool)return; chipCool=now+4000;
@@ -5091,6 +5105,7 @@ function dfdTick(dtMs){
   }
   D._acc=acc;
   dfdHUD();
+  renderPod();
 }
 function dfdEndWave(){
   const D=S.dfd;
@@ -5178,6 +5193,62 @@ function dfdVictory2(){
   document.getElementById('win').classList.remove('hidden');
   log('🏆 '+L.name.toUpperCase()+' SURVIVED — '+'★'.repeat(stars));
 }
+function podResChips(){
+  const D=S.dfd;
+  const r=[['water','💧',S.water+'/'+S.waterCap],['seeds','🌰',S.seeds],['dirt','🟤',S.dirt],
+           ['stone','🪨',S.stone],['wood','🪵',S.wood],['sup','🧺',D?D.supplies:0]];
+  return r.map(([k,ic,v])=>`<span class="rc" data-k="${k}">${ic} ${v}</span>`).join('');
+}
+function syncDockH(){
+  const d=document.getElementById('dock');
+  if(!d||!document.body.classList.contains('bottomdock')){document.documentElement.style.setProperty('--dockH','12px');return;}
+  const h=Math.max(60,Math.round(d.getBoundingClientRect().height));
+  document.documentElement.style.setProperty('--dockH',h+'px');
+}
+function renderPod(){
+  const pod=document.getElementById('pod'); if(!pod)return;
+  const D=S.dfd;
+  if(!(S.mode==='defend'&&D)||D.won||D.lost){pod.classList.add('hidden');return;}
+  pod.classList.remove('hidden');
+  const W=dfdWaveComp(D.wave), n=dfdWaves().length, fighting=D.phase==='wave';
+  pod.classList.toggle('fight',fighting);
+  const icon=W?(W.type==='wet'?'⛈':(W.type==='spell'?'🌡':'☀️')):'☀️';
+  document.getElementById('podWave').textContent=
+    (DLEVELS[D.level]&&DLEVELS[D.level].endless?`YEAR ${(D.lap||0)+1} · WAVE ${Math.min(D.wave+1,n)}`
+      :`WAVE ${Math.min(D.wave+1,n)} / ${n}`);
+  const clk=document.getElementById('podClock');
+  clk.textContent=fighting&&BT?`⚔ ${BT.creeps.length+BT.spawns.length}`:`${icon} ${Math.max(0,Math.ceil(D.phaseT))}s`;
+  const bar=document.querySelector('#podBar i');
+  if(bar)bar.style.width=(fighting&&BT
+    ? Math.round(100*(1-(BT.creeps.length+BT.spawns.length)/Math.max(1,BT.total)))
+    : Math.round(100*(1-D.phaseT/(D.phase==='prep'?PREP_T:INTER_T))))+'%';
+  const res=document.getElementById('podRes');
+  const html=podResChips();
+  if(res.dataset.h!==html){res.innerHTML=html;res.dataset.h=html;}
+  const hh=(cur,max,ic)=>`<span class="hh">${ic} ${'❤️'.repeat(Math.max(0,cur))}${'🖤'.repeat(Math.max(0,max-cur))}</span>`;
+  document.getElementById('podHearts').innerHTML=
+    hh(D.houseHP,D.houseMax||12,'🏠')
+    +(D.ghBuilt?hh(D.ghHP,6,'🏡'):'<span class="hh" style="opacity:.55">🏡 build it</span>')
+    +(D.coopBuilt?hh(D.coopHP,6,'🐔'):'<span class="hh" style="opacity:.55">🐔 build it</span>')
+    +`<span>🌿 <b>${landScore()}%</b></span>`;
+  // the one big action: call the storm early during prep, run at double speed in a fight
+  const act=document.getElementById('podAct');
+  if(fighting){
+    act.className='speed'+((D.speed||1)>1?' on':'');
+    act.innerHTML=`⏩ <b>${(D.speed||1)>1?'DOUBLE TIME':'SPEED UP'}</b>`;
+    act.onclick=()=>{D.speed=(D.speed||1)>1?1:2;renderPod();say(D.speed>1?'Double time. ⏩':'Back to real time.');};
+  } else {
+    const bonus=Math.min(40,Math.round(Math.max(0,D.phaseT)*0.6));
+    act.className='';
+    act.innerHTML=`⛈ <b>CALL STORM</b><small>+${bonus}💧</small>`;
+    act.onclick=()=>{ if(D.phase==='wave')return;
+      const b2=Math.min(40,Math.round(Math.max(0,D.phaseT)*0.6));
+      D.phaseT=0;S.water=Math.min(S.waterCap,S.water+b2);
+      say(b2>=20?`Nerve pays — +${b2}💧 for calling it that early. ⛈`:`Called early — +${b2}💧. ⛈`);
+      SFX.thunder();renderPod();
+    };
+  }
+}
 function dfdHUD(){
   const D=S.dfd; if(!D)return;
   const bc=document.getElementById('bcTime');
@@ -5209,6 +5280,8 @@ function dockTabLabel(){
   } else tab.textContent=collapsed?'⏴':'⏵';
 }
 function dockCollapse(on){
+  if(document.body.classList.contains('bottomdock'))return; // the bottom hand never tucks away
+
   document.getElementById('dock').classList.toggle('collapsed',on);
   dockTabLabel();
 }
@@ -5305,6 +5378,7 @@ function onResize(){
     updateCamera();
   }
   _lastPortrait=p;
+  syncDockH();
   renderer.setSize(VW,VH);
   camera.aspect=VW/VH;
   camera.updateProjectionMatrix();
