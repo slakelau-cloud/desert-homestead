@@ -439,13 +439,13 @@
      keeps the whole top of the screen. Sizing follows the genre: ~66px cards,
      3px chocolate borders, one oversized primary button. */
   /* the top bar: wave, resources and hearts hug the top edge in one slim strip */
-  #pod{position:absolute;left:6px;right:6px;top:calc(4px + env(safe-area-inset-top,0px));bottom:auto;
+  #pod{position:absolute;left:6px;right:56px;top:calc(4px + env(safe-area-inset-top,0px));bottom:auto;
     transform:none;width:auto;z-index:6;
     background:rgba(255,251,238,.94);border:2.5px solid var(--ink);
     border-radius:13px;box-shadow:0 3px 0 rgba(74,48,24,.35),0 6px 14px rgba(74,48,24,.15);
     padding:3px 8px 4px;display:flex;flex-direction:column;gap:3px;pointer-events:auto;}
   #pod.hidden{display:none;}
-  #podHead{display:flex;align-items:center;gap:6px;padding-right:104px;min-height:17px;}
+  #podHead{display:flex;align-items:center;gap:6px;padding-right:96px;min-height:17px;}
   #podWave{font-family:var(--fun);font-size:11px;letter-spacing:.3px;color:var(--ink);flex:0 0 auto;white-space:nowrap;}
   #podClock,#podClock.gone{display:none;}
   #podBar{height:4px;border-radius:3px;background:#e7d5ac;overflow:hidden;border:1px solid #cbb083;}
@@ -458,13 +458,14 @@
   #podHearts b{font-weight:800;}
   #podHearts .hh{letter-spacing:-1.5px;}
   /* the one big action, alone on the bottom edge above the hand */
-  #podAct{position:absolute;left:8px;right:62px;bottom:calc(var(--dockH,96px) + 6px);z-index:6;
-    border:3px solid #8a6410;border-radius:12px;padding:6px 10px;cursor:pointer;
+  #podAct{position:absolute;left:6px;right:6px;top:calc(var(--barH,52px) + 8px + env(safe-area-inset-top,0px));bottom:auto;z-index:6;
+    border:3px solid #8a6410;border-radius:12px;padding:5px 10px;cursor:pointer;
     background:linear-gradient(180deg,#ffe08a,#f5bb32 55%,#e0a11c);color:#4a3008;
     font-family:var(--fun);font-size:16px;letter-spacing:.3px;text-shadow:0 1px 0 rgba(255,255,255,.55);
     box-shadow:0 4px 0 #a97f14;display:flex;align-items:center;justify-content:center;gap:7px;}
   #podAct.hidden{display:none;}
   #podAct small{font-size:12px;opacity:.85;font-family:inherit;}
+  #podAct b{font-size:15px;}
   #podAct:active{transform:translateY(3px);box-shadow:0 1px 0 #a97f14;}
   #podAct.speed{background:linear-gradient(180deg,#cfe9ff,#8fc4ee 55%,#5da5dd);border-color:#2f6f9f;
     color:#123449;box-shadow:0 4px 0 #2f6f9f;}
@@ -472,7 +473,7 @@
     color:#0f3a22;box-shadow:0 4px 0 #1d6b40;}
 
   /* the gear — a drawn, translucent glyph, not a text label sitting off-centre */
-  #gearBtn{position:absolute;right:8px;bottom:calc(var(--dockH,96px) + 6px);z-index:7;
+  #gearBtn{position:absolute;right:6px;top:calc(6px + env(safe-area-inset-top,0px));bottom:auto;z-index:9;
     width:46px;height:46px;border-radius:50%;cursor:pointer;padding:0;
     font-size:0;line-height:0;color:transparent;text-indent:-999px;overflow:hidden;
     background-color:rgba(255,251,238,.3);
@@ -482,7 +483,7 @@
     -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);}
   #gearBtn:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(74,48,24,.22);}
   #gearBtn.open{background-color:rgba(255,214,130,.75);border-color:rgba(74,48,24,.6);}
-  #leftRail{position:absolute;left:auto;right:10px;bottom:calc(var(--dockH,96px) + 62px);z-index:8;
+  #leftRail{position:absolute;left:auto;right:8px;top:calc(58px + env(safe-area-inset-top,0px));bottom:auto;z-index:9;
     display:flex;flex-direction:column;gap:5px;width:210px;
     background:rgba(255,251,238,.97);border:3px solid var(--ink);border-radius:14px;padding:7px;
     box-shadow:0 5px 0 rgba(74,48,24,.42),0 10px 22px rgba(74,48,24,.2);}
@@ -505,18 +506,22 @@
     padding:3px 2px 6px;align-items:stretch;scrollbar-width:none;-webkit-overflow-scrolling:touch;}
   body.bottomdock #workbar::-webkit-scrollbar{display:none;}
   body.bottomdock #workbar .cap,body.bottomdock #workbar .docknote{display:none;}
-  /* icon-only cards, BTD6 style — the name is dead weight, the price is what you read */
-  body.bottomdock #workbar .tcard{flex:0 0 auto;width:60px;height:68px;margin:0;padding:3px 2px;overflow:hidden;
-    display:flex;flex-direction:column;align-items:center;justify-content:space-between;gap:0;
-    border-radius:12px;border:3px solid var(--ink);background:linear-gradient(180deg,#fffdf4,#f4e4bf);
+  /* the hand: SQUARE, soft-cornered tiles in two rows — BTD6 portraits, price banded
+     across the foot of the tile. Only things you can BUILD live here. */
+  body.bottomdock #workbar{display:grid !important;grid-auto-flow:column;grid-template-rows:repeat(2,auto);
+    gap:5px;justify-content:start;align-content:start;}
+  body.bottomdock #workbar .tcard{position:relative;flex:0 0 auto;width:56px;height:56px;margin:0;padding:0;overflow:hidden;
+    display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;
+    border-radius:15px;border:3px solid var(--ink);background:linear-gradient(180deg,#fffdf4,#f4e4bf);
     box-shadow:0 3px 0 rgba(74,48,24,.4);}
-  body.bottomdock #workbar .tcard .trow{flex-direction:column;gap:0;align-items:center;text-align:center;flex:1 1 auto;justify-content:center;}
+  body.bottomdock #workbar .tcard .trow{flex-direction:column;gap:0;align-items:center;text-align:center;
+    flex:0 0 auto;justify-content:center;margin-bottom:9px;}
   body.bottomdock #workbar .tcard .tic{font-size:26px;line-height:1;}
   body.bottomdock #workbar .tcard b{display:none;}
-  /* the price strip: the one piece of text on the card, so make it readable */
-  body.bottomdock #workbar .tcard .tcost{display:block;text-align:center;margin-top:0;max-width:100%;width:100%;
-    background:#f6e8c8;border:1.5px solid #e0cda2;border-radius:7px;padding:0 1px;line-height:1.2;box-sizing:border-box;
-    min-height:15px;}
+  /* the price band: sits across the foot of the square, inside the frame */
+  body.bottomdock #workbar .tcard .tcost{position:absolute;left:0;right:0;bottom:0;display:block;text-align:center;
+    margin:0;background:rgba(246,232,200,.95);border:0;border-top:1.5px solid #e0cda2;border-radius:0;
+    padding:0;line-height:14px;height:15px;box-sizing:border-box;}
   body.bottomdock #workbar .tcard .tcost .cc,
   body.bottomdock #workbar .tcard .tcost .cchip{display:inline;background:none;border:0;padding:0 1px;
     font-size:10.5px;font-weight:800;color:#5b4426;border-radius:0;white-space:nowrap;}
@@ -535,11 +540,17 @@
     text-align:center;font-size:11.5px;line-height:1.25;padding:4px 9px;pointer-events:none;
     background:rgba(255,251,238,.9);}
   body.bottomdock #camhint{display:none;}
-  body.bottomdock #nowchip{top:60px;bottom:auto;font-size:11.5px;padding:3px 11px;}
-  body.bottomdock #goalsBox{top:92px;left:auto;right:6px;width:auto;max-width:52vw;padding:2px 8px 3px;}
-  body.bottomdock #goalsBox.min{padding:2px 8px;}
+  body.bottomdock #nowchip{top:calc(var(--barH,52px) + 50px + env(safe-area-inset-top,0px));bottom:auto;
+    font-size:11.5px;padding:3px 11px;max-width:92vw;z-index:6;
+    transition:opacity .35s ease,transform .35s ease;}
+  body.bottomdock #nowchip::before{content:"";position:absolute;top:-7px;left:50%;margin-left:-6px;
+    width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;
+    border-bottom:7px solid #dcc891;}
+  body.bottomdock #nowchip.tucked{opacity:0;transform:translateX(-50%) translateY(-8px) scale(.94);pointer-events:none;}
+  body.bottomdock #goalsBox{display:none;}
   /* the day / tomorrow's weather sits in the very top-right corner, over the bar */
-  body.bottomdock #hud{top:calc(7px + env(safe-area-inset-top,0px));left:auto;right:12px;
+  body.bottomdock #leftRail{bottom:auto !important;top:calc(56px + env(safe-area-inset-top,0px)) !important;}
+  body.bottomdock #hud{top:calc(7px + env(safe-area-inset-top,0px));left:auto;right:60px;
     width:auto;justify-content:flex-end;flex-wrap:nowrap;z-index:7;gap:4px;}
   body.bottomdock #hud .pill{font-size:11px;padding:1px 7px;border-radius:9px;}
   body.bottomdock #hud .pill.hidden{display:none;}
@@ -587,7 +598,7 @@
     <div class="panel hidden" id="weatherbox"></div>
   </div>
   <div id="hud">
-    <span class="pill brand hidden">🌵 <span id="verlabel">v7.1</span></span>
+    <span class="pill brand hidden">🌵 <span id="verlabel">v7.2</span></span>
     <span class="pill" id="daybox"></span>
     <span class="pill" id="wpill"></span>
     <span class="pill" id="timerpill" title="The day ends when the sun does — spend your energy fast!">⏳</span>
@@ -595,6 +606,8 @@
   <!-- the gear: everything that is not the game itself lives behind one button -->
   <button id="gearBtn" title="Options">⚙</button>
   <div id="leftRail" class="hidden">
+    <button id="upBtn" title="Upgrade a work">⬆️ <u>Upgrade a work</u></button>
+    <button id="clrBtn" title="Clear / remove">🧹 <u>Clear or remove</u></button>
     <button id="infoBtn" title="Journal">📖 <u>Journal</u></button>
     <button id="wvBtn" title="Water view (V)">💧 <u>Water &amp; contour view</u></button>
     <button id="rsBtn" title="Retry level">↻ <u>Restart this year</u></button>
@@ -624,7 +637,7 @@
       <div class="logoSub">catch the rain · hold the soil · defend the home</div>
     </div>
     <p style="margin:6px 0;"><b>A permaculture castle defense.</b> The monsoon comes down your watershed as living waves — water monsters, rockslides, heat imps, raiders — and everything you build fights back. Swales drink the flood into money, your plants are the towers, and water is not their ammo — it is their <b>strength</b>.</p>
-    <p style="line-height:1.7;font-size:13px;">⛏ <b>Swale pairs</b> slurp water monsters and bank the 💧.&nbsp;
+    <p style="line-height:1.7;font-size:13px;">⛏ <b>Swales</b> are one tile — a half-moon scoop facing downhill that slurps water monsters, banks the 💧, and lays a bed either side of itself.&nbsp;
     🌽 <b>Plant towers</b> sling, lob, and smash — forever. Away from water they <b>wilt</b> and weaken but never fall silent; a monsoon springs them all back, and 🌵 prickly pear never wilts at all.&nbsp;
     🪵 <b>Dams</b> wall the wash and snag log rams.&nbsp;
     ☀️ <b>Dry waves</b> come to burn what you banked.&nbsp;

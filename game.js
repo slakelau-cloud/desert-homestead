@@ -405,11 +405,32 @@ const tileAt=(x,y)=>(x>=0&&x<COLS&&y>=0&&y<ROWS)?S.grid[y][x]:null;
 const nearWash=(x,y)=>[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{const n=tileAt(x+dx,y+dy);return n&&n.type==='wash';});
 // Once a swale is dug, the open sand tile DIRECTLY DOWNHILL of it is spoken for:
 // only its berm can ever be built there. (Derived, not stored — clearing the swale frees the spot.)
-const bermReserved=(t,x,y)=>{if(!t||t.type!=='sand'||nearWash(x,y))return false;const up=tileAt(x,y-1);return !!(up&&up.type==='swale');};
+const bermReserved=(t,x,y)=>{
+  if(S.mode==='defend')return false;   // one-tile swales reserve nothing — the berm is part of them now
+  if(!t||t.type!=='sand'||nearWash(x,y))return false;const up=tileAt(x,y-1);return !!(up&&up.type==='swale');};
+/* WHICH WAY A SWALE OPENS.
+   A swale is a half-moon scoop cut into the ground, and its open mouth always faces
+   the way the water is already trying to go: straight downhill by default, but on
+   ground that leans sideways toward the channel it turns and faces the channel
+   instead. Its two BEDS sit across the mouth, one either side — swale in the middle,
+   a straight line of three. */
+function swaleFace(t,x,y){
+  // ONLY ground that actually leans sideways at the channel turns the swale — the first
+  // couple of tiles of a graded bank. Ordinary stair-step ground, however steep it falls
+  // toward the bottom of the map, keeps the swale facing straight downhill.
+  if(t&&t.tilt&&(t.tiltMag||0)>0.30&&(t.bank||9)<=2)return t.tilt>0?'E':'W';
+  return 'S';
+}
+function swaleBedSpots(x,y,face){ // the two tiles across the mouth, perpendicular to the facing
+  return face==='S'?[[x-1,y],[x+1,y]]:[[x,y-1],[x,y+1]];
+}
+function swaleFaceAngle(face){return face==='E'?Math.PI/2:(face==='W'?-Math.PI/2:0);}
 function neighbors(x,y){return [tileAt(x-1,y),tileAt(x+1,y),tileAt(x,y-1),tileAt(x,y+1)].filter(Boolean);}
 function countAll(fn){let n=0;for(const row of S.grid)for(const t of row)if(fn(t))n++;return n;}
 const BDA_CAP=12;
-function swaleCap(x,y){const below=tileAt(x,y+1);return 10+(below&&below.type==='berm'?8:0);}
+function swaleCap(x,y){const t=tileAt(x,y);
+  if(S.mode==='defend')return 18;               // swale + berm merged into one tile: the full pair's capacity
+  const below=tileAt(x,y+1);return 10+(below&&below.type==='berm'?8:0);}
 function mapResto(){let m=0;for(const row of S.grid)for(const t of row)if(t.resto>m)m=t.resto;return m;}
 
 const MOBILE=(window.matchMedia&&matchMedia('(pointer:coarse)').matches)||Math.min(window.innerWidth,window.innerHeight)<560;
@@ -464,6 +485,25 @@ function flashChip(key){
 const FARM_TOOLS=['plant-beans','plant-squash','plant-corn','plant-pear'];
 const BUILD_TOOLS=['cistern','green','home'];
 let confirmRestart=false;
+/* Upgrade and Clear are ACTIONS, not things you build, so they are not cards.
+   They sit behind the gear and arm exactly the same way. */
+const ACTION_TOOLS=['upT','clearT'];
+function syncRailTools(){
+  const D=S.dfd;
+  for(const [id,tool] of [['upBtn','upT'],['clrBtn','clearT']]){
+    const b=document.getElementById(id); if(!b)continue;
+    const live=!!(S.mode==='defend'&&D&&S.unlocked.includes(tool));
+    b.style.display=live?'':'none';
+    b.classList.toggle('sel',live&&D.sel===tool);
+  }
+}
+function armTool(tool){
+  if(!(S.mode==='defend'&&S.dfd))return;
+  if(!S.unlocked.includes(tool)){say('Not unlocked yet.');return;}
+  dfdSelect(tool);
+  syncRailTools();
+  gearOpen(false);
+}
 function buildToolbar(){
   const workbar=document.getElementById('workbar');
   if(S.mode==='defend'&&S.dfd){ // the hand: a row of cards along the bottom edge, tap to arm, tap the map to place
@@ -474,6 +514,7 @@ function buildToolbar(){
     const cap=document.createElement('div');cap.className='cap';cap.textContent='🏗 Towers';workbar.appendChild(cap);
     for(const c of TOWER_CARDS){
       if(!S.unlocked.includes(c.id))continue;
+      if(ACTION_TOOLS.includes(c.id))continue;   // upgrade + clear are actions, not constructables — they live behind the gear
       const b=document.createElement('button');
       b.className='tcard'+(S.dfd.sel===c.id?' armed':'')+(dfdAfford(c)?'':' broke');
       b.innerHTML=`<span class="trow"><span class="tic">${c.ic}</span><b>${c.name}</b></span>`
@@ -482,16 +523,11 @@ function buildToolbar(){
       b.onclick=()=>dfdSelect(c.id);
       workbar.appendChild(b);
     }
-    if(S.dfd.sel){
-      const x=document.createElement('button');
-      x.className='tcard cancel';x.innerHTML='✕ <b>Cancel</b>';
-      x.onclick=()=>{S.dfd.sel=null;buildToolbar();say('Placement cancelled.');};
-      workbar.appendChild(x);
-    }
     const note=document.createElement('div');
     note.className='docknote';
     note.innerHTML='🪓 <b>Stone &amp; wood:</b> tap a 🪨 boulder or 🪵 tree to select it, tap again to take it. Free — but they don´t grow back.';
     workbar.appendChild(note);
+    syncRailTools();
     toolbarTail(null);
     syncDockH();
     return;
@@ -1071,7 +1107,7 @@ function startMode(mode,lv){
     dfdStart(lv);
     fitCam();cam.theta=0.18;cam.phi=1.1;updateCamera();
     const howto=lv===0?
-      '<br><br><b>How it works:</b> 🌵 <b>Prickly pear is your starter</b> — plant it anywhere, it never thirsts, but it hits soft. ⛏ <b>Berm & swale</b> slurps water monsters into 💧 (money!) and digs its own beds beside it — that´s where the real towers grow. <b>Plants never stop firing</b> — but away from water they WILT over a few waves and get weaker. A swale beside them holds them one more turn, a monsoon springs them all back at once, and 🌵 prickly pear never wilts at all. DRY waves send heat imps to burn your banked water — <b>shade</b> is the answer to those. Pick cards from the <b>dock on the right</b>, tap the map to place, and <b>tap the monsters</b> to smack them yourself. 🪓 Stone and wood come from boulders and trees: <b>tap once to see the haul, tap again to collect</b> — free, finite, and storms wash fresh driftwood into the channels.':'';
+      '<br><br><b>How it works:</b> 🌵 <b>Prickly pear is your starter</b> — plant it anywhere, it never thirsts, but it hits soft. ⛏ <b>Swales</b> are one tile — a half-moon scoop that faces downhill (or turns to face the channel on leaning ground). Each one slurps water monsters into 💧 (money!) and lays a bed on either side of its mouth — that´s where the real towers grow. <b>Plants never stop firing</b> — but away from water they WILT over a few waves and get weaker. A swale beside them holds them one more turn, a monsoon springs them all back at once, and 🌵 prickly pear never wilts at all. DRY waves send heat imps to burn your banked water — <b>shade</b> is the answer to those. Pick cards from the <b>dock on the right</b>, tap the map to place, and <b>tap the monsters</b> to smack them yourself. 🪓 Stone and wood come from boulders and trees: <b>tap once to see the haul, tap again to collect</b> — free, finite, and storms wash fresh driftwood into the channels.':'';
     showChap('🌵 Level '+(lv+1)+' — '+L.name, L.intro+howto);
     log(L.name+': wave 1 of '+dfdWaves().length+' builds on the horizon. The dock is on the right.');
   }
@@ -1646,7 +1682,7 @@ function describeCore(t,x,y){
       return bermReserved(t,x,y)?'Open sand — but spoken for: the swale just uphill saves this spot for its 🧱 berm (1 dirt). Nothing else builds here while the swale stands.':'Open sand — dig, till, or build here.';
     }
     case 'rock':return 'A boulder — 🪓 breaks into 2 stone (1⚡), then it\'s gone. Stone is finite here.';
-    case 'swale':return `Swale holding ${t.stored}/${swaleCap(x,y)}L of runoff. Waters its side and downhill neighbors — plus same-level ground on flat terraces.`;
+    case 'swale':return `Swale holding ${t.stored}/${swaleCap(x,y)}L of runoff — a half-moon scoop with its mouth open ${t.face==='E'?'toward the channel on the right':(t.face==='W'?'toward the channel on the left':'downhill')}. It waters the beds either side of it and keeps them from wilting.`;
     case 'berm':return 'A berm — banks up the downhill side of a swale so it holds more.';
     case 'wash':return t.deco==='drift'?'Driftwood snagged in the wash — 🪓 an easy 2 wood (1⚡).':t.dam?(t.beaver?`A REAL BEAVER DAM now — ${t.stored}/${BDA_CAP*2}L, self-repairing, snags double debris, and the pair builds upstream. The strongest defense the desert has. 🦫`:`Beaver-dam analog holding ${t.stored}/${BDA_CAP}L (${t.wetDays} wet days — ${RESTO_STAGES[t.resto]}${t.resto<4?', next: '+RESTO_STAGES[t.resto+1]:''}).${t.resto>=2?' Keep it wet — real beavers take over restored dams. 🦫':''}`):'A dry desert wash. Storm water races through — a 🪵 dam would slow it down.';
     case 'ord':return `A one-rock dam${t.stored>0?`, holding a ${t.stored}L puddle`:''}. Silt trapped: ${t.soil}/4 — when it fills, grass takes over.`;
@@ -2409,36 +2445,35 @@ function buildTile(x,y){
         const s=0.55+0.45*Math.min(1,t.stored/BDA_CAP);
         w.scale.set(s,1,s);g.add(w);
       }
-    } else if(t.type==='swale'){ // swale: a genuinely sunken square basin, lips standing at grade
-      const below=tileAt(x,y+1);
-      const paired=!!(below&&below.type==='berm');
-      const lipH=0.125, lipY=0.24;
-      const mkLip=(w,d,px,pz)=>{
-        const b=new THREE.Mesh(new THREE.BoxGeometry(w,lipH,d),M.sand[1]);
-        b.position.set(px,lipY,pz);b.castShadow=true;b.receiveShadow=true;g.add(b);
-      };
-      mkLip(0.2,1.0,-0.4,0);            // left lip
-      mkLip(0.2,1.0, 0.4,0);            // right lip
-      mkLip(0.6,0.2, 0,-0.4);           // uphill lip
-      if(!paired)mkLip(0.6,0.2,0,0.4);  // downhill lip (open when a berm continues the basin)
-      const floor=new THREE.Mesh(new THREE.BoxGeometry(0.6,0.02,paired?0.8:0.6),M.swaleDeep);
-      floor.position.set(0,0.19,paired?0.1:0);
-      floor.receiveShadow=true;
-      g.add(floor);
-      if(raining){ // storm: the basin reads FULL — water hovers over the recessed pit only
-        const w=new THREE.Mesh(G.swWaterSq,M.water);
-        w.rotation.x=-Math.PI/2;
-        w.scale.set(1.05,paired?1.5:1.05,1);
-        w.position.set(0,0.315,paired?0.12:0);
-        g.add(w);
+    } else if(t.type==='swale'){
+      /* THE SWALE — one tile: a half-moon scoop cut into the ground with a raised
+         earth lip curving around the back of it, and its mouth standing open the way
+         the water wants to run. The whole thing is built facing +Z and then turned. */
+      const face=t.face||swaleFace(t,x,y);
+      const scoop=new THREE.Group();
+      scoop.rotation.y=swaleFaceAngle(face);
+      g.add(scoop);
+      const R=0.44, lipH=0.15, lipY=0.255, floorY=0.185;
+      // the curved earth lip: a half-ring wall standing around the closed side
+      const lip=new THREE.Mesh(
+        new THREE.CylinderGeometry(R+0.045,R+0.055,lipH,22,1,true,Math.PI/2,Math.PI),M.sand[1]);
+      lip.position.y=lipY;lip.castShadow=true;lip.receiveShadow=true;scoop.add(lip);
+      // and the two horns where the lip meets the mouth, so it reads as a crescent
+      for(const sx of [-1,1]){
+        const horn=new THREE.Mesh(new THREE.BoxGeometry(0.1,lipH,0.13),M.sand[1]);
+        horn.position.set(sx*(R+0.02),lipY,0.03);scoop.add(horn);
       }
-      else if(t.stored>0){
-        const w=new THREE.Mesh(G.swWaterSq,M.water);
-        w.rotation.x=-Math.PI/2;
-        const s=0.5+0.5*Math.min(1,t.stored/swaleCap(x,y));
-        w.scale.set(s,paired?s*1.45:s,1);
-        w.position.set(0,0.215,paired?0.12:0);
-        g.add(w);
+      // the sunken floor: a half-disc of dark, damp ground
+      const floor=new THREE.Mesh(new THREE.CircleGeometry(R+0.04,22,Math.PI/2,Math.PI),M.swaleDeep);
+      floor.rotation.x=-Math.PI/2;floor.rotation.z=Math.PI;   // CircleGeometry sweeps in XY, so lie it down
+      floor.position.y=floorY;floor.receiveShadow=true;scoop.add(floor);
+      // and the water standing in it
+      const fill=raining?1:(t.stored>0?Math.min(1,t.stored/swaleCap(x,y)):0);
+      if(fill>0){
+        const w=new THREE.Mesh(new THREE.CircleGeometry(R*(0.55+0.45*fill),22,Math.PI/2,Math.PI),M.water);
+        w.rotation.x=-Math.PI/2;w.rotation.z=Math.PI;
+        w.position.y=raining?0.315:0.215;
+        scoop.add(w);
       }
     }
     if(t.deco==='drift')addDrift(g,t.rot,0.18);
@@ -3377,7 +3412,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v7.1 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v7.2 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -3536,7 +3571,7 @@ function nowObjective(){
       return {key:'dfd:coop',text:'🐔 Build the coop — +6 ❤',
         full:'The coop is six more hearts of armor and it trickles +2 💧 every half-minute, and its birds eat grasshoppers and ants. Coyotes come for it — put a 🌵 fence beside it.',hint:null};
     return {key:'dfd:prep'+D.wave,text:`${nw.type==='wet'?'🌧 Wet wave next — dig swales to bank it':(nw.type==='spell'?'🌡 Dry spell next — nothing comes but the heat':'☀️ Dry wave next — shade, fences, shooters')}`,
-      full:`Next: ${dfdPreviewStr(D.wave)}. ${nw.type==='wet'?'Wet wave — swale pairs and dams turn the monsters into money.':'DRY wave — heat imps drink your water and raiders come for the farm. Scarecrows, fences, and shooters.'}`,hint:'pair'};
+      full:`Next: ${dfdPreviewStr(D.wave)}. ${nw.type==='wet'?'Wet wave — swales and dams turn the monsters into money.':'DRY wave — heat imps drink your water and raiders come for the farm. Scarecrows, fences, and shooters.'}`,hint:'pair'};
   }
   if(S.mode==='campaign'){
     const objs=chapterObjectives(); if(!objs)return null;
@@ -3640,6 +3675,11 @@ function guidanceTick(){
   }
   if(hintStage===2&&now-lastBeaconT>14000){fireBeacon();lastBeaconT=now;}
 }
+let _nowShownT=0;
+const NOW_HOLD=6500;               // how long the pop-out stays out before it tucks back in
+function popNowChip(){_nowShownT=performance.now();
+  const chip=document.getElementById('nowchip');
+  if(chip){chip.classList.remove('tucked');chip.classList.remove('pop');void chip.offsetWidth;chip.classList.add('pop');}}
 function updateNowChip(){
   const chip=document.getElementById('nowchip'), txt=document.getElementById('nowtext');
   if(!chip)return;
@@ -3648,15 +3688,20 @@ function updateNowChip(){
   chip.classList.remove('hidden');
   if(o.key!==_nowKey){
     txt.textContent=o.text;
-    if(_nowKey){chip.classList.remove('pop');void chip.offsetWidth;chip.classList.add('pop');}
     _nowKey=o.key;
+    popNowChip();                  // a new objective pops out from under the button…
   }
+  chip.classList.toggle('tucked',performance.now()-_nowShownT>NOW_HOLD); // …and tucks itself away again
 }
 document.getElementById('gearBtn').addEventListener('click',e=>{e.stopPropagation();gearOpen();});
+{const u=document.getElementById('upBtn');if(u)u.addEventListener('click',e=>{e.stopPropagation();armTool('upT');});
+ const c=document.getElementById('clrBtn');if(c)c.addEventListener('click',e=>{e.stopPropagation();armTool('clearT');});}
 for(const id of ['infoBtn','wvBtn','rsBtn','sndBtn','saveBtn','skiptest']){
   const b=document.getElementById(id);
   if(b)b.addEventListener('click',()=>setTimeout(()=>gearOpen(false),0));
 }
+{const bar=document.getElementById('pod');
+ if(bar)bar.addEventListener('click',()=>{if(S.mode==='defend'&&S.dfd)popNowChip();});}
 document.getElementById('nowchip').addEventListener('click',()=>{
   const now=performance.now(); if(now<chipCool)return; chipCool=now+4000;
   const o=nowObjective(); if(!o)return;
@@ -3781,7 +3826,7 @@ const PREP_T=45, INTER_T=26;
 // tower cards — the BTD6 dock. THREE resources only: cost:{water,stone,wood}
 const TOWER_CARDS=[
  {id:'plant-pear',  ic:'🌵', name:'Prickly pear', cost:{water:3}, gain:'plant ANYWHERE · NEVER wilts · spreads pads · hits soft', unlockWave:0},
- {id:'pair',  ic:'⛏', name:'Berm & swale', cost:{water:4}, gain:'slurps 💧 · digs beds · keeps them from wilting', unlockWave:0},
+ {id:'pair',  ic:'⛏', name:'Swale', cost:{water:4}, gain:'ONE tile · a half-moon scoop facing downhill · lays a bed either side · slurps 💧', unlockWave:0},
  {id:'plant-beans', ic:'🫘', name:'Beans',   cost:{water:6}, gain:'rapid seed-slinger · feeds its neighbours · needs a bed', unlockWave:0},
  {id:'plant-corn',  ic:'🌽', name:'Corn',    cost:{water:10}, gain:'kernel lobber · tassels 💧 · BASE GARDEN only', unlockWave:1},
  {id:'sling', ic:'🪀', name:'Sling tower', cost:{stone:2,wood:2}, gain:'cracks boulders into cobbles · upgrades to a trebuchet', unlockWave:1},
@@ -3943,9 +3988,7 @@ function upgradeSpec(t){ // one card, many improvements — tap the thing you wa
 function dfdCanPlace(id,x,y){
   const t=tileAt(x,y); if(!t)return false;
   switch(id){
-    case 'pair':{const b=tileAt(x,y+1);
-      return t.type==='sand'&&!t.deco&&!nearWash(x,y)&&!bermReserved(t,x,y)
-        &&!!b&&b.type==='sand'&&!b.deco&&!nearWash(x,y+1);}
+    case 'pair':return t.type==='sand'&&!t.deco&&!t.weed&&!nearWash(x,y);
     case 'sling':case 'scare':case 'fence':return t.type==='sand'&&!t.deco&&!bermReserved(t,x,y);
     case 'cistern':return t.type==='sand'&&!t.deco&&y>=ROWS-4; // storage lives down at the base
     case 'green':  return t.type==='sand'&&!t.deco&&!bermReserved(t,x,y)&&y>=ROWS-4&&!S.dfd.ghBuilt;
@@ -3963,12 +4006,9 @@ function dfdCanPlace(id,x,y){
         const crop=id.slice(6);
         if(crop==='pear') // the starter grows straight out of the caliche — anywhere open
           return (t.type==='sand'&&!t.deco&&!bermReserved(t,x,y))||((t.type==='bed'||t.type==='green')&&!t.plant);
-        if((t.type!=='bed'&&t.type!=='green')||t.plant)return false; // everything else needs a real bed — beds come from berm & swales, the cistern ring, and the greenhouse
+        if((t.type!=='bed'&&t.type!=='green')||t.plant)return false; // everything else needs a real bed — beds come from swales, the cistern ring, and the greenhouse
         if(crop==='corn'||crop==='squash'){
-          if(y<ROWS-4)return false;
-          const nearWork=[[1,0],[-1,0],[0,1],[0,-1]].some(([dx,dy])=>{
-            const n=tileAt(x+dx,y+dy);return n&&(n.type==='swale'||n.type==='berm');});
-          if(nearWork)return false;
+          if(y<ROWS-4)return false;   // heavy feeders stay down on the flat
         }
         return true;
       }
@@ -4005,16 +4045,16 @@ function dfdPlace(id,x,y){
   dfdPay(c);
   if(id==='pair'){
     t.type='swale';t.deco=null;
-    const b=tileAt(x,y+1);b.type='berm';b.deco=null;
+    t.face=swaleFace(t,x,y);                     // downhill, unless the ground leans at the wash
     let beds=0;
-    for(const dx of [-1,1]){ // the dug dirt banks its own growing pockets beside the basin
-      const n=tileAt(x+dx,y);
-      if(n&&n.type==='sand'&&!n.deco&&!nearWash(x+dx,y)&&!bermReserved(n,x+dx,y)){
-        n.type='bed';n.moisture=3;beds++;bounceTile(x+dx,y);
+    for(const [bx,by] of swaleBedSpots(x,y,t.face)){ // a bed either side of the mouth
+      const n=tileAt(bx,by);
+      if(n&&n.type==='sand'&&!n.deco&&!n.weed&&!nearWash(bx,by)){
+        n.type='bed';n.moisture=3;beds++;bounceTile(bx,by);
       }
     }
-    bounceTile(x,y);bounceTile(x,y+1);SFX.dig();
-    popAt(x,y,beds?`⛏ +${beds} beds!`:'⛏ pair!',0,'earth');
+    bounceTile(x,y);SFX.dig();
+    popAt(x,y,beds?`⛏ +${beds} beds!`:'⛏ swale!',0,'earth');
   } else if(id==='sling'){t.type='sling';t.deco=null;SFX.build();bounceTile(x,y);popAt(x,y,'🪀 armed!',0,'earth');}
   else if(id==='cistern'){
     t.type='cistern';t.deco=null;S.waterCap+=50;
@@ -4075,7 +4115,7 @@ function dfdCostStr(c){
 }
 function dfdPlaceHint(id){
   switch(id){
-    case 'pair':return 'Berm & swale needs two open sand tiles stacked — basin above, bank below, clear of the wash. It digs its own beds beside it.';
+    case 'pair':return 'A swale needs one open sand tile clear of the wash. It scoops itself a half-moon basin facing downhill — or facing the channel, on ground that leans that way — and lays a bed on each side of its mouth.';
     case 'clearT':return 'Tap one of your own works to remove it — or a boulder, tree, or driftwood to clear the tile and keep the 🪨/🪵.';
     case 'ord':return 'Rock dams sit in the small creeks only.';
     case 'bda':return 'Wash dams go on open wash tiles.';
@@ -4091,7 +4131,7 @@ function dfdPlaceHint(id){
     default:
       if(id==='plant-corn'||id==='plant-squash')return 'The heavy defenders grow only in BASE GARDEN beds — on the flat, never beside swales or berms. The cistern digs beds around itself.';
       if(id==='plant-pear')return 'Prickly pear grows anywhere on open ground — banks included, just never in the wash or creeks themselves.';
-      return id.startsWith('plant-')?'Needs an empty bed — berm & swales dig beds beside themselves, and the cistern digs a garden ring.':'Needs open sand.';
+      return id.startsWith('plant-')?'Needs an empty bed — a swale lays one on each side of itself, and the cistern digs a garden ring.':'Needs open sand.';
   }
 }
 function dfdWaves(){return (S.dfd&&S.dfd.wavesArr)||DWAVES;}
@@ -5184,6 +5224,7 @@ function syncDockH(){
   const h=Math.max(60,Math.round(d.getBoundingClientRect().height));
   document.documentElement.style.setProperty('--dockH',h+'px');
 }
+let _barH=0;
 function renderPod(){
   const pod=document.getElementById('pod'); if(!pod)return;
   const D=S.dfd;
@@ -5253,6 +5294,9 @@ function dfdHUD(){
     if(o)nt.textContent=o.text;
     document.getElementById('nowchip').classList.toggle('hidden',!o);
   }
+  // the bar knows how deep it is, so the button and the pop-out can sit right under it
+  const bh=Math.round(pod.getBoundingClientRect().height);
+  if(bh&&bh!==_barH){_barH=bh;document.documentElement.style.setProperty('--barH',bh+'px');}
 }
 /* placement + battle input */
 function dockTabLabel(){
