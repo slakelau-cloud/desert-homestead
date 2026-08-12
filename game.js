@@ -661,6 +661,14 @@ function toggleOverlay(){
 window.addEventListener('keydown',e=>{
   noteInput();
   if((e.key==='v'||e.key==='V')&&!e.repeat)toggleOverlay();
+  { // arrow keys / WASD walk the camera over the site; C puts it back in the middle
+    const step=cam.dist*0.09, k=e.key;
+    if(k==='ArrowUp'||k==='w'||k==='W'){e.preventDefault();camPan(0,step);}
+    else if(k==='ArrowDown'||k==='s'||k==='S'){e.preventDefault();camPan(0,-step);}
+    else if(k==='ArrowLeft'||k==='a'||k==='A'){e.preventDefault();camPan(-step,0);}
+    else if(k==='ArrowRight'||k==='d'||k==='D'){e.preventDefault();camPan(step,0);}
+    else if((k==='c'||k==='C')&&!e.repeat)camRecenter();
+  }
   if((e.key===' '||e.key==='e'||e.key==='E')&&!e.repeat){
     if(!document.getElementById('intro').classList.contains('hidden'))return;
     if(!document.getElementById('chap').classList.contains('hidden')){document.getElementById('chap').classList.add('hidden');return;}
@@ -1682,6 +1690,8 @@ function smartClick(x,y,cx,cy){
 }
 window.smartClick=smartClick;
 function describe(t,x,y){
+  if(S.mode==='defend'&&typeof inHeadwaters==='function'&&inHeadwaters(y))
+    return 'THE HEADWATERS. The storm comes in over these top '+NOBUILD_ROWS+' rows — nothing gets built here. You can still clear a boulder or a tree for the 🪨/🪵. Everything you make goes further down, where you can see it. ⛰';
   const base=describeCore(t,x,y);
   const bits=[base];
   if(t.plant&&S.dfd){
@@ -2334,6 +2344,7 @@ const M={
   flood:new THREE.MeshPhongMaterial({color:0x4696cc,transparent:true,opacity:0.8,depthWrite:false,shininess:70,specular:0x8fc8e8}),
   floodMid:new THREE.MeshLambertMaterial({color:0x5aa4d4,transparent:true,opacity:0.55,depthWrite:false}),
   floodLite:new THREE.MeshLambertMaterial({color:0x74b4dc,transparent:true,opacity:0.26,depthWrite:false}),
+  nobuild:new THREE.MeshBasicMaterial({color:0x6b5a44,transparent:true,opacity:0.16,depthWrite:false}),
   hover:new THREE.MeshBasicMaterial({color:0xf2b134,transparent:true,opacity:0.3,side:THREE.DoubleSide}),
   hoverOk:new THREE.MeshBasicMaterial({color:0x6fbf5f,transparent:true,opacity:0.35,side:THREE.DoubleSide}),
   spotOk:new THREE.MeshBasicMaterial({color:0x58b34a,transparent:true,opacity:0.5,side:THREE.DoubleSide,depthWrite:false}),
@@ -2536,6 +2547,11 @@ function buildTile(x,y){
       const deep=t.type==='bed'||t.type==='ord';
       const f=new THREE.Mesh(G.otile,deep?M.floodMid:M.floodLite);
       f.rotation.x=-Math.PI/2;f.position.y=t.type==='bed'?0.4:0.37;g.add(f);
+    }
+    // the headwaters read as shaded ground you cannot work
+    if(S.mode==='defend'&&typeof inHeadwaters==='function'&&inHeadwaters(y)){
+      const nb=new THREE.Mesh(G.otile,M.nobuild);
+      nb.rotation.x=-Math.PI/2;nb.position.y=0.34;g.add(nb);
     }
     if(S.weather!=='rain'&&t.type==='ord'&&t.stored>0){
       const w=mesh(G.water,M.water,0,0.36,-0.2,{noShadow:true});
@@ -3322,25 +3338,47 @@ function nudgeZoomLimit(dir){ // tell the player it is a limit, not a broken ges
   say(dir==='in'?'That is as close as the camera goes — any nearer and you lose the field you are defending. 🔍'
                 :'That is as far out as it goes — the whole site is already in frame. 🔍');
 }
+/* PANNING. The camera used to be nailed to the middle of the site, which made the top
+   of the watershed a squint. It now looks at a target you can walk anywhere over the
+   ground — two fingers on a phone, arrow keys on a desktop, or the ▲▼ buttons. */
+function camClampTarget(){ // stop short of the edges so the site never drifts off into empty sky
+  const rz=Math.max(2,(typeof ROWS==='number'?ROWS:20)/2-3);
+  const rx=Math.max(2,(typeof COLS==='number'?COLS:12)/2-2);
+  cam.cz=Math.max(-rz,Math.min(rz,cam.cz||0));
+  cam.cx=Math.max(-rx,Math.min(rx,cam.cx||0));
+}
 function updateCamera(){
   cam.phi=Math.max(0.35,Math.min(1.35,cam.phi));
   cam.dist=Math.max(camMin(),Math.min(camMax(),cam.dist));
+  camClampTarget();
   camera.position.set(
-    Math.sin(cam.theta)*Math.sin(cam.phi)*cam.dist,
+    (cam.cx||0)+Math.sin(cam.theta)*Math.sin(cam.phi)*cam.dist,
     Math.cos(cam.phi)*cam.dist,
-    Math.cos(cam.theta)*Math.sin(cam.phi)*cam.dist
+    (cam.cz||0)+Math.cos(cam.theta)*Math.sin(cam.phi)*cam.dist
   );
-  camera.lookAt(0,1.9,cam.cz||0);
+  camera.lookAt(cam.cx||0,1.9,cam.cz||0);
 }
+/* pan in SCREEN terms: "up" always means further up the watershed from where you sit,
+   whatever way the camera happens to be turned. */
+function camPan(right,fwd){
+  const c=Math.cos(cam.theta), sn=Math.sin(cam.theta);
+  cam.cx=(cam.cx||0)+right*c - fwd*sn;
+  cam.cz=(cam.cz||0)-right*sn - fwd*c;
+  updateCamera();
+}
+function camRecenter(){cam.cx=0;cam.cz=0;updateCamera();say('Camera back to the middle of the site. 🎥');}
 updateCamera();
 
 let dragging=false,downX=0,downY=0,moved=0,lastX=0,lastY=0;
 const el=renderer.domElement;
 let lastPaint=null, painted=false, touchN=0, pinchD=0, pressTimer=null;
+let pinchMX=0,pinchMY=0;
+const touchMid=t=>[(t[0].clientX+t[1].clientX)/2,(t[0].clientY+t[1].clientY)/2];
 el.addEventListener('touchstart',e=>{
   touchN=e.touches.length;
   if(touchN===2){
     pinchD=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
+    [pinchMX,pinchMY]=touchMid(e.touches);
     moved=99; if(pressTimer){clearTimeout(pressTimer);pressTimer=null;}
   }
 },{passive:true});
@@ -3351,6 +3389,11 @@ el.addEventListener('touchmove',e=>{
     if(pinchD>0){const before=cam.dist;cam.dist*=pinchD/d;updateCamera();
       if(cam.dist===before)nudgeZoomLimit(cam.dist<=camMin()+0.01?'in':'out');}
     pinchD=d;
+    // and sliding both fingers together walks the camera over the ground
+    const [mx,my]=touchMid(e.touches);
+    const k=cam.dist*0.0022;
+    camPan(-(mx-pinchMX)*k,(my-pinchMY)*k);
+    pinchMX=mx;pinchMY=my;
   }
 },{passive:false});
 el.addEventListener('touchend',e=>{touchN=e.touches.length;if(touchN<2)pinchD=0;},{passive:true});
@@ -3459,7 +3502,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v7.3 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v7.4 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -3739,6 +3782,25 @@ function updateNowChip(){
     popNowChip();                  // a new objective pops out from under the button…
   }
   chip.classList.toggle('tucked',performance.now()-_nowShownT>NOW_HOLD); // …and tucks itself away again
+}
+/* the pan pad — press to step, hold to glide. The one control that makes the top of the
+   watershed reachable on a phone without a two-finger gesture nobody discovers. */
+{
+  const hold={t:null,r:null};
+  const stop=()=>{if(hold.t)clearTimeout(hold.t);if(hold.r)clearInterval(hold.r);hold.t=hold.r=null;};
+  for(const [id,rx,fz] of [['panUp',0,1],['panDown',0,-1],['panLeft',-1,0],['panRight',1,0]]){
+    const b2=document.getElementById(id); if(!b2)continue;
+    const go=(mul)=>camPan(rx*cam.dist*0.075*mul,fz*cam.dist*0.075*mul);
+    const start=(ev)=>{ev.preventDefault();ev.stopPropagation();noteInput();go(1);
+      hold.t=setTimeout(()=>{hold.r=setInterval(()=>go(0.42),33);},260);};
+    b2.addEventListener('pointerdown',start);
+    b2.addEventListener('pointerup',stop);
+    b2.addEventListener('pointerleave',stop);
+    b2.addEventListener('pointercancel',stop);
+    b2.addEventListener('click',e=>{e.stopPropagation();});
+  }
+  const rc=document.getElementById('panHome');
+  if(rc)rc.addEventListener('click',e=>{e.stopPropagation();camRecenter();});
 }
 document.getElementById('gearBtn').addEventListener('click',e=>{e.stopPropagation();gearOpen();});
 {const u=document.getElementById('upBtn');if(u)u.addEventListener('click',e=>{e.stopPropagation();armTool('upT');});
@@ -4032,8 +4094,15 @@ function upgradeSpec(t){ // one card, many improvements — tap the thing you wa
     return {cost:{sup:2},label:'a pear THICKET',apply:()=>{t.thicket=1;}};
   return null;
 }
+/* THE HEADWATERS. The top of the map is where the storm comes in — you do not get to
+   build up there. It keeps the fight in front of you instead of at the spawn line, and
+   it means the camera never has to be squinting at the far edge to place a tower.
+   Clearing and upgrading still work up there; only new works are refused. */
+const NOBUILD_ROWS=5;
+function inHeadwaters(y){return y<NOBUILD_ROWS;}
 function dfdCanPlace(id,x,y){
   const t=tileAt(x,y); if(!t)return false;
+  if(inHeadwaters(y)&&id!=='upT'&&id!=='clearT')return false;
   switch(id){
     case 'pair':return t.type==='sand'&&!t.deco&&!t.weed&&!nearWash(x,y);
     case 'sling':case 'scare':case 'fence':return t.type==='sand'&&!t.deco&&!bermReserved(t,x,y);
@@ -4087,6 +4156,9 @@ function dfdPlace(id,x,y){
     return false;
   }
   if(id!=='upT'&&!dfdAfford(c)){say('Can´t afford it yet — '+dfdCostStr(c)+'.');flashChip(c.cost.water?'water':(c.cost.stone?'stone':'wood'));return false;}
+  if(id!=='clearT'&&inHeadwaters(y)&&id!=='upT'){
+    say('That is the headwaters — the top '+NOBUILD_ROWS+' rows are where the storm comes in, and nothing gets built there. Work it from further down. ⛰');
+    return false;}
   if(id!=='clearT'&&!dfdCanPlace(id,x,y)){say(dfdPlaceHint(id));return false;}
   const t=tileAt(x,y);
   dfdPay(c);

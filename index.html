@@ -472,6 +472,26 @@
   #podAct.speed.on{background:linear-gradient(180deg,#b6f0cf,#5fce93 55%,#2f9f63);border-color:#1d6b40;
     color:#0f3a22;box-shadow:0 4px 0 #1d6b40;}
 
+  /* the pan pad — a translucent d-pad on the left edge. Press to step, hold to glide. */
+  #panPad{position:absolute;left:8px;top:50%;transform:translateY(-50%);bottom:auto;z-index:7;
+    display:flex;flex-direction:column;align-items:center;gap:3px;touch-action:none;}
+  #panPad .panRow{display:flex;gap:3px;align-items:center;}
+  #panPad button{width:34px;height:30px;border-radius:9px;padding:0;cursor:pointer;
+    font-size:14px;line-height:1;font-weight:900;color:rgba(74,48,24,.62);
+    background:rgba(255,251,238,.42);border:2px solid rgba(74,48,24,.22);
+    box-shadow:0 2px 0 rgba(74,48,24,.14);
+    -webkit-backdrop-filter:blur(2px);backdrop-filter:blur(2px);
+    display:flex;align-items:center;justify-content:center;-webkit-user-select:none;user-select:none;}
+  #panPad button:active{box-shadow:0 0 0 rgba(74,48,24,.14);
+    background:rgba(255,226,160,.8);color:rgba(74,48,24,.9);}
+  #panPad #panHome{width:30px;font-size:13px;}
+  #panPad #panUp,#panPad #panDown{width:60px;}
+  @media (max-width:520px){
+    #panPad button{width:38px;height:32px;font-size:15px;}
+    #panPad #panUp,#panPad #panDown{width:70px;}
+    #panPad #panHome{width:32px;}
+  }
+
   /* the gear — a drawn, translucent glyph, not a text label sitting off-centre */
   #gearBtn{position:absolute;right:6px;top:calc(6px + env(safe-area-inset-top,0px));bottom:auto;z-index:9;
     width:46px;height:46px;border-radius:50%;cursor:pointer;padding:0;
@@ -598,13 +618,23 @@
     <div class="panel hidden" id="weatherbox"></div>
   </div>
   <div id="hud">
-    <span class="pill brand hidden">🌵 <span id="verlabel">v7.3</span></span>
+    <span class="pill brand hidden">🌵 <span id="verlabel">v7.4</span></span>
     <span class="pill" id="daybox"></span>
     <span class="pill" id="wpill"></span>
     <span class="pill" id="timerpill" title="The day ends when the sun does — spend your energy fast!">⏳</span>
   </div>
   <!-- the gear: everything that is not the game itself lives behind one button -->
   <button id="gearBtn" title="Options">⚙</button>
+  <!-- the pan pad: walk the camera up the watershed to build on the top tiers -->
+  <div id="panPad">
+    <button id="panUp" title="Look further up the slope (↑ / W)">▲</button>
+    <div class="panRow">
+      <button id="panLeft" title="Pan left (← / A)">◀</button>
+      <button id="panHome" title="Back to the middle (C)">⌂</button>
+      <button id="panRight" title="Pan right (→ / D)">▶</button>
+    </div>
+    <button id="panDown" title="Look back down the slope (↓ / S)">▼</button>
+  </div>
   <div id="leftRail" class="hidden">
     <button id="upBtn" title="Upgrade a work">⬆️ <u>Upgrade a work</u></button>
     <button id="clrBtn" title="Clear / remove">🧹 <u>Clear or remove</u></button>
@@ -643,7 +673,7 @@
     ☀️ <b>Dry waves</b> come to burn what you banked.&nbsp;
     🦫 <b>Keep a dam wet</b> and the beavers finish the job.</p>
     <p style="font-size:12.5px;color:#8a5a2e;">Five years on five sites — from a gentle bajada to the whole watershed, then <b>the Long Dry</b> forever. Only the house comes with the land; everything else you build. 🦫</p>
-    <p style="font-size:12.5px;color:#8a6b52;"><b>Drag</b> orbits · <b>scroll</b> zooms · <b>tap a card</b> then the map to build · <b>tap monsters</b> to smack them · ⏩ doubles time · ⛈ calls the storm early.</p>
+    <p style="font-size:12.5px;color:#8a6b52;"><b>Drag</b> orbits · <b>scroll</b> zooms · <b>▲▼ on the left</b> (or two fingers, or the arrow keys) walks the camera up and down the slope · the shaded ground at the very top is the <b>headwaters</b>, where the storm comes in — you can clear it, but you cannot build on it · <b>tap a card</b> then the map to build · <b>tap monsters</b> to smack them · ⏩ doubles time · ⛈ calls the storm early.</p>
     <div id="lvlgrid"></div>
     <p id="nojs" style="margin:14px 0 0;font-size:12px;background:#fff2df;border:1px solid #e8bd63;border-radius:9px;padding:8px 10px;">
       ⚠️ <b>Buttons not responding?</b> You're in a file <i>preview</i> (Gmail and iPhone Files previews turn scripts off, so the game can't start).<br>
