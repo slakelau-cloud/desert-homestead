@@ -465,7 +465,7 @@ function buildToolbar(){
     }
     const note=document.createElement('div');
     note.className='docknote';
-    note.innerHTML='🪓 <b>Stone &amp; wood:</b> tap a 🪨 boulder or 🪵 tree once to see its haul, tap again to collect. Or arm 🧹 <b>Clear</b> and tap it — same haul, and it frees the tile. Free, but they don´t grow back.';
+    note.innerHTML='🪓 <b>Stone &amp; wood:</b> tap a 🪨 boulder or 🪵 tree to select it, tap again to take it. Free — but they don´t grow back.';
     workbar.appendChild(note);
     toolbarTail(null);
     return;
@@ -1313,14 +1313,14 @@ function clickTile(x,y){
   }
   else if(tool==='gather'){
     const freeGather=(S.mode==='defend'); // no energy economy in the live-wave game — hauling is free
-    if(t.type==='rock'){
+    if(t.type==='rock'||t.deco==='rock'){
       if(!freeGather&&!spend(1))return;
       S.stone+=2;S.lv.stone+=2;
       t.type='sand';t.deco=null;
       popAt(x,y,'+2 🪨',0,'earth');flyRes(x,y,'stone','🪨',2);SFX.gather();
       say(`Broke the boulder into 2 stone (now ${S.stone}). That one's spent. 🪨`);
     }
-    else if(t.deco==='drift'){
+    else if(t.deco==='drift'||t.deco==='driftwood'){
       if(!freeGather&&!spend(1))return;
       S.wood+=2;S.lv.wood+=2;t.deco=null;
       popAt(x,y,'+2 🪵',0,'earth');flyRes(x,y,'wood','🪵',2);SFX.gather();
@@ -1523,7 +1523,7 @@ function showCtx(t,x,y,cx,cy){
 function smartClick(x,y,cx,cy){
   const t=tileAt(x,y); if(!t)return;
   if(S.mode==='defend'&&S.dfd){
-    if(S.dfd.sel){dfdPlace(S.dfd.sel,x,y);buildToolbar();return;}
+    if(S.dfd.sel){clearGatherArm();dfdPlace(S.dfd.sel,x,y);buildToolbar();return;}
     if(t.type==='paddock'&&S.dfd.herd&&!(S.dfd.herd.x===x&&S.dfd.herd.y===y)){
       S.dfd.herd={x,y};SFX.gather();popAt(x,y,'🐐 rotated!',0,'earth');
       say(t.soil>=2?'Fresh pasture — double 🧺 on the next graze.':'Thin pasture — let the others rest.');
@@ -1534,11 +1534,12 @@ function smartClick(x,y,cx,cy){
       else {say('Water stock is dry — catch the next monsoon and every plant springs back at once.');flashChip('water');}
       return;
     }
-    if(t.type==='rock'||t.deco==='drift'||(t.deco&&TREE_SPECIES.includes(t.deco))){
-      if(gatherArm&&gatherArm.x===x&&gatherArm.y===y){clearGatherArm();doTool('gather',x,y);} // second tap: collect
-      else armGather(x,y,t); // first tap: show what's on offer
+    if(isGatherable(t)){
+      if(gatherArm&&gatherArm.x===x&&gatherArm.y===y){clearGatherArm();doTool('gather',x,y);} // second tap: take it
+      else armGather(x,y,t);                                                                  // first tap: select it
       return;
     }
+    clearGatherArm(); // tapping anywhere else drops the selection
     say(describe(t,x,y));
     return;
   }
@@ -2052,6 +2053,7 @@ const G={
   pebble:new THREE.DodecahedronGeometry(0.07),
   hover:new THREE.PlaneGeometry(0.98,0.98),
   otile:new THREE.PlaneGeometry(0.94,0.94),
+  selRing:new THREE.RingGeometry(0.42,0.56,28),
   arrow:new THREE.ConeGeometry(0.09,0.24,6),
 };
 G.bermCrest=(()=>{
@@ -2126,6 +2128,7 @@ const M={
   wilt:lam(0x8f8a5a),
   contourM:new THREE.MeshBasicMaterial({color:0x3a2a12,transparent:true,opacity:0.10}),
   tiltM:new THREE.MeshBasicMaterial({color:0x2f8fd6,transparent:true,opacity:0.75}),
+  selM:new THREE.MeshBasicMaterial({color:0x7ef0a8,transparent:true,opacity:0.85,side:THREE.DoubleSide,depthWrite:false}),
   contourOn:new THREE.MeshBasicMaterial({color:0x2fd6a8,transparent:true,opacity:0.34}),
   beanpod:lam(0x3a5a2a),
   squash:lam(0xd67f2e),
@@ -2890,7 +2893,11 @@ function buildTile(x,y){
     g.add(sm);
   }
   if(t.tilt&&t.type!=='wash'&&t.type!=='creek'){
-    g.rotation.z=-t.tilt*t.tiltMag*0.085; // the ground actually leans toward the channel
+    // the ground visibly LEANS toward the channel — you should be able to read a side
+    // slope at a glance, the way you can standing on real ground next to a wash
+    g.rotation.z=-t.tilt*t.tiltMag*0.62;   // up to ~35°: unmistakable at a glance
+    g.position.x+=t.tilt*t.tiltMag*0.07;   // and it slumps that way
+    g.position.y-=t.tiltMag*0.07;
   }
   if(S.overlay){
     // SIDE SLOPE arrows: which way this ground sends its water
@@ -2932,23 +2939,52 @@ function buildTile(x,y){
 }
 
 const harvestTags=[];
-let gatherArm=null; // first tap shows the badge; a second tap before it fades collects
+/* ---------- SELECTION: one tap highlights it, a second tap takes it ----------
+   No badge, no popup — the tile itself lifts and picks up a glowing ring, the
+   way a selected unit does. Tap it again to collect, tap anywhere else to drop it. */
+function isGatherable(t){
+  if(!t)return false;
+  if(t.deco==='saguaro'||t.deco==='snake')return false;
+  return t.type==='rock'||t.deco==='rock'||t.deco==='drift'||t.deco==='driftwood'
+    ||(t.deco&&TREE_SPECIES.includes(t.deco));
+}
+let gatherArm=null;
 function clearGatherArm(){
-  if(gatherArm){clearTimeout(gatherArm.t1);clearTimeout(gatherArm.t2);gatherArm.el.remove();gatherArm=null;}
+  if(!gatherArm)return;
+  clearTimeout(gatherArm.t2);
+  if(gatherArm.ring&&gatherArm.ring.parent)gatherArm.ring.parent.remove(gatherArm.ring);
+  const grp=tileGroups[gatherArm.y]&&tileGroups[gatherArm.y][gatherArm.x];
+  if(grp)grp.position.y=gatherArm.baseY||0;
+  gatherArm=null;
 }
 function armGather(x,y,t){
+  const already=gatherArm&&gatherArm.x===x&&gatherArm.y===y;
   clearGatherArm();
-  const isRock=t.type==='rock';
-  const el=document.createElement('div');
-  el.className='htag gtag armed';
-  el.innerHTML=(isRock?'🪨':'🪵')+'<small>+2</small>';
-  el.title='Tap again to collect';
-  el.addEventListener('click',e=>{e.stopPropagation();clearGatherArm();doTool('gather',x,y);});
-  view.appendChild(el);
-  gatherArm={x,y,el,
-    t1:setTimeout(()=>{el.classList.add('fading');},2000),
-    t2:setTimeout(()=>{clearGatherArm();},2650)};
+  if(already)return; // tapping the same thing twice is handled by the caller
+  const isRock=(t.type==='rock'||t.deco==='rock');
+  const ring=new THREE.Mesh(G.selRing,M.selM);
+  ring.rotation.x=-Math.PI/2;
+  ring.position.set(gx(x),t.elev+0.395,gz(y));
+  scene.add(ring);
+  const grp=tileGroups[y]&&tileGroups[y][x];
+  const baseY=grp?grp.position.y:0;
+  gatherArm={x,y,ring,baseY,t0:performance.now(),
+    t2:setTimeout(()=>{clearGatherArm();},5200)};
   SFX.tick();
+  say(isRock
+    ? 'Boulder selected — tap it again to break it out. 🪨 +2 stone, and the tile is yours to build on.'
+    : (t.deco==='drift'||t.deco==='driftwood')
+      ? 'Driftwood selected — tap again to haul it off. 🪵 +2 wood.'
+      : 'Tree selected — tap again to fell it. 🪵 +2 wood, and it won´t come back this year.');
+}
+function animateGatherArm(){
+  if(!gatherArm)return;
+  const el=(performance.now()-gatherArm.t0)/1000;
+  const p=(el%1.1)/1.1;
+  gatherArm.ring.scale.setScalar(0.86+p*0.30);
+  gatherArm.ring.material.opacity=0.85*(1-p*0.75)*Math.min(1,(5.2-el)*1.5);
+  const grp=tileGroups[gatherArm.y]&&tileGroups[gatherArm.y][gatherArm.x];
+  if(grp)grp.position.y=gatherArm.baseY+0.10+Math.sin(el*3.4)*0.035; // it lifts, and breathes
 }
 function buildTags(){
   for(const tg of harvestTags)tg.el.remove();
@@ -3251,7 +3287,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v6.1 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v6.2 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -5145,6 +5181,7 @@ function animate(){
       }}
   }
   animateTilePops();
+  animateGatherArm();
   if(S.mode==='defend'&&S.dfd){const nowT=performance.now();dfdTick(nowT-(S.dfd._lastT||nowT));S.dfd._lastT=nowT;}
   if(performance.now()-lastGuidT>260){lastGuidT=performance.now();guidanceTick();} // time-based: survives throttled frame rates
   for(const a of animated){
