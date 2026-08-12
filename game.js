@@ -946,8 +946,16 @@ function prologueLoss(){
 function fitCam(){
   cam.cz=S.mode==='defend'?4.2:0; // defend frames the homestead flat
   const portrait=(typeof VH!=='undefined'?VH:window.innerHeight)>(typeof VW!=='undefined'?VW:window.innerWidth);
-  cam.dist=(7+ROWS*0.85)*(portrait?1.5:1);
+  cam.fit=(7+ROWS*0.85)*(portrait?1.5:1); // the distance that frames this map
+  cam.dist=cam.fit;
 }
+// Zoom is bounded RELATIVE to that framing, so the limits mean the same thing on a
+// 12×20 tutorial slope and a 14×26 watershed, in portrait and in landscape:
+//   out — barely past the framed view, so the map never shrinks into a speck in the sky
+//   in  — half the framing distance, close enough to read a tile, not so close you lose the field
+const ZOOM_OUT=1.12, ZOOM_IN=0.5;
+function camMin(){return Math.max(7,(cam.fit||24)*ZOOM_IN);}
+function camMax(){return Math.min(46,(cam.fit||24)*ZOOM_OUT);}
 function applyLevelStart(c){
   const st=c.start||{};
   S.water=st.water??35;S.waterCap=60;S.seeds=st.seeds??4;S.dirt=st.dirt??2;
@@ -3209,9 +3217,16 @@ function stepRunners(){
 
 /* --- camera orbit --- */
 const cam={theta:0.18,phi:0.95,dist:22,cz:0};
+let _zoomMsgT=0;
+function nudgeZoomLimit(dir){ // tell the player it is a limit, not a broken gesture — but rarely
+  const now=performance.now();
+  if(now-_zoomMsgT<4000)return; _zoomMsgT=now;
+  say(dir==='in'?'That is as close as the camera goes — any nearer and you lose the field you are defending. 🔍'
+                :'That is as far out as it goes — the whole site is already in frame. 🔍');
+}
 function updateCamera(){
   cam.phi=Math.max(0.35,Math.min(1.35,cam.phi));
-  cam.dist=Math.max(7,Math.min(46,cam.dist));
+  cam.dist=Math.max(camMin(),Math.min(camMax(),cam.dist));
   camera.position.set(
     Math.sin(cam.theta)*Math.sin(cam.phi)*cam.dist,
     Math.cos(cam.phi)*cam.dist,
@@ -3235,7 +3250,8 @@ el.addEventListener('touchmove',e=>{
   if(e.touches.length===2){
     e.preventDefault();
     const d=Math.hypot(e.touches[0].clientX-e.touches[1].clientX,e.touches[0].clientY-e.touches[1].clientY);
-    if(pinchD>0){cam.dist*=pinchD/d;updateCamera();}
+    if(pinchD>0){const before=cam.dist;cam.dist*=pinchD/d;updateCamera();
+      if(cam.dist===before)nudgeZoomLimit(cam.dist<=camMin()+0.01?'in':'out');}
     pinchD=d;
   }
 },{passive:false});
@@ -3297,7 +3313,11 @@ el.addEventListener('pointerup',e=>{
   }
 });
 el.addEventListener('pointerleave',()=>{hoverMesh.visible=false;hovered=null;});
-el.addEventListener('wheel',e=>{e.preventDefault();cam.dist+=e.deltaY*0.012;updateCamera();},{passive:false});
+el.addEventListener('wheel',e=>{e.preventDefault();
+  const before=cam.dist;
+  cam.dist+=e.deltaY*0.012;updateCamera();
+  if(cam.dist===before&&Math.abs(e.deltaY)>2)nudgeZoomLimit(cam.dist<=camMin()+0.01?'in':'out');
+},{passive:false});
 el.addEventListener('contextmenu',e=>{
   e.preventDefault();noteInput();
   const p=pickTile(e);
@@ -3341,7 +3361,7 @@ let prevRes={};
 function refresh(){
   hideCtx();
   document.getElementById('daybox').textContent=`Day ${S.day}`;
-  document.getElementById('verlabel').textContent=`v6.4 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
+  document.getElementById('verlabel').textContent=`v6.5 · ${S.mode==='defend'&&S.dfd?('L'+(S.dfd.level+1)+' · wave '+Math.min(S.dfd.wave+1,dfdWaves().length)+'/'+dfdWaves().length):(S.mode==='campaign'?('classic '+Math.min(S.chapter+1,CHAPTERS.length)+'/'+CHAPTERS.length):'sandbox')}`;
   const res={water:S.water,seeds:S.seeds,food:S.food,dirt:S.dirt,stone:S.stone,wood:S.wood,bags:S.bags,energy:S.energy,sup:S.dfd?S.dfd.supplies:0};
   const bump=k=>prevRes[k]!==undefined&&prevRes[k]!==res[k]?' bump':'';
   const showStone=isUnlocked('ord')||S.stone>0;
@@ -5278,7 +5298,12 @@ function onResize(){
   VW=Math.max(300,view.clientWidth||900);
   VH=Math.max(260,view.clientHeight||560);
   const p=VH>VW;
-  if(_lastPortrait!==null&&p!==_lastPortrait){fitCam();updateCamera();}
+  if(_lastPortrait!==null&&p!==_lastPortrait){
+    const rel=cam.fit?cam.dist/cam.fit:1; // hold the player's zoom level across the rotation
+    fitCam();
+    cam.dist=cam.fit*Math.max(ZOOM_IN,Math.min(ZOOM_OUT,rel));
+    updateCamera();
+  }
   _lastPortrait=p;
   renderer.setSize(VW,VH);
   camera.aspect=VW/VH;
